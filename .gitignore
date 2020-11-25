@@ -1,0 +1,7 @@
+# Object files
+*.o
+*.img
+unittest-1
+unittest-2
+hw3fuse
+*.pyc
