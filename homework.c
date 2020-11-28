@@ -36,6 +36,8 @@ extern int block_read(void *buf, int lba, int nblks);
 extern int block_write(void *buf, int lba, int nblks);
 
 /* global variables */
+fd_set *inode_map;
+fd_set *block_map;
 struct fs_super superblock;
 struct fs_inode *inode_region;	/* inodes in memory */
 int inode_map_sz;
@@ -74,8 +76,29 @@ int bit_test(unsigned char *map, int i)
  */
 void* fs_init(struct fuse_conn_info *conn)
 {
-    /* your code here */
-    struct fs_super sb;
+    // /* your code here */
+    // struct fs_super sb;
+    // /* here 1 stands for block size, here is 4096 bytes */
+    // block_read(&sb, 0, 1);
+
+    // /* read bitmaps */
+    // inode_map = sb.pad;
+    // block_read(inode_map, 1, sb.disk_size);
+    // inode_map_sz = sb.disk_size;
+    // // printf("%d\n", inode_map_sz);
+
+    // block_map = malloc(sb.disk_size * FS_BLOCK_SIZE);
+    // block_read(block_map, sb.disk_size + 1, sb.disk_size * FS_BLOCK_SIZE);
+    // block_map_sz = sb.disk_size * FS_BLOCK_SIZE;
+    // // printf("%d\n", block_map_sz);
+
+    // /* read inodes */
+    // inode_region = malloc(sb.disk_size * FS_BLOCK_SIZE);
+    // int inode_region_pos = 1 + sb.disk_size + block_map_sz;
+    // block_read(inode_region, inode_region_pos, sb.disk_size);
+    // // printf("%d\n", sb.inode_region_sz);
+    // num_of_blocks = sizeof(sb.pad);
+    // // printf("%d\n", num_of_blocks);
 
     return NULL;
 }
