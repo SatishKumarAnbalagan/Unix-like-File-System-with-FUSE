@@ -38,7 +38,9 @@ extern int block_write(void *buf, int lba, int nblks);
 /* global variables */
 struct fs_super superblock;
 struct fs_inode *inode_region;	/* inodes in memory */
-
+int inode_map_sz;
+int block_map_sz;
+int num_of_blocks;
 
 /* function declaration */
 
@@ -191,6 +193,11 @@ static void set_attr(struct fs_inode inode, struct stat *sb) {
     sb->st_atime = inode.mtime;
     sb->st_ctime = inode.ctime;
     sb->st_mtime = inode.mtime;
+}
+
+void update_inode(int inum) {
+    int offset = 1 + inode_map_sz + block_map_sz + (inum / 16);
+    //block_write(&inode_region[inum - (inum % 16)], offset, 1);
 }
 
 /* getattr - get file or directory attributes. For a description of
@@ -371,7 +378,19 @@ int fs_rename(const char *src_path, const char *dst_path)
 int fs_chmod(const char *path, mode_t mode)
 {
     /* your code here */
-    return -EOPNOTSUPP;
+    int inum = translate(path);
+
+    if (inum < 0) {
+    	return inum;
+    }
+
+    struct fs_inode *inode;
+    inode = &inode_region[inum];
+    inode->mode = mode;
+
+    update_inode(inum);
+
+    return 0;
 }
 
 int fs_utime(const char *path, struct utimbuf *ut)
