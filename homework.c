@@ -37,6 +37,16 @@ extern int block_write(void *buf, int lba, int nblks);
 
 /* global variables */
 struct fs_super superblock;
+struct fs_inode *inode_region;	/* inodes in memory */
+
+
+/* function declaration */
+
+/* truncate the last token from path return 1 if succeed, 0 if not*/
+int truncate_path (const char *path, char **truncated_path);
+
+/* translate: return the inode number of given path */
+static int translate(const char *path);
 
 /* bitmap functions
  */
@@ -90,7 +100,83 @@ void* fs_init(struct fuse_conn_info *conn)
  *    free(_path);
  */
 
+static int translate(const char *path) {
+    /* split the path */
+    char *_path;
+    _path = strdup(path);
+    /* traverse to path */
+    /* root father_inode */
+    int inode_num = 1;
+    struct fs_inode *father_inode;
+    struct fs_dirent *dir;
+    dir = malloc(FS_BLOCK_SIZE);
 
+    struct fs_dirent dummy_dir = {
+	.valid = 1,
+	.inode = inode_num,
+	.name = "/",
+    };
+    struct fs_dirent *current_dir = &dummy_dir;
+
+    char *token;
+    char *delim = "/";
+    token = strtok(_path, delim);
+    int error = 0;
+    /* traverse all the subsides */
+    /* if found, return corresponding father_inode */
+    /* else, return error */
+    while (token != NULL) {
+        if (current_dir->valid == 0) {
+	        error = -ENOENT;
+            break;
+	    }
+
+	    father_inode = &inode_region[inode_num];
+	    int block_pos = father_inode->ptrs[0];
+        //block_read(dir, block_pos, 1)
+	    int i;
+	    int found = 0;
+	    for (i = 0; i < 32; i++) {
+            if (strcmp(dir[i].name, token) == 0 && dir[i].valid == 1) {
+                found = 1;
+                inode_num = dir[i].inode;
+                current_dir = &dir[i];
+            }
+	    }
+	    if (found == 0) {
+            error = -ENOENT;
+            break;
+	    }
+        token = strtok(NULL, delim);
+    }
+
+    free(dir);
+    free(_path);
+    if (error != 0) {
+        return error;
+    }
+    return inode_num;
+}
+
+int truncate_path (const char *path, char **truncated_path) {
+    int i = strlen(path) - 1;
+    // strip the tailling '/'
+    // deal with '///' case
+    for (; i >= 0; i--) {
+        if (path[i] != '/') {
+            break;
+        }
+    }
+    for (; i >= 0; i--) {
+    	if (path[i] == '/') {
+            *truncated_path = (char*)malloc(sizeof(char) * (i + 2));
+            memcpy(*truncated_path, path, i + 1);
+            (*truncated_path)[i + 1] = '\0';
+            return 1;
+    	}
+    }
+    return 0;
+}
 
 /* getattr - get file or directory attributes. For a description of
  *  the fields in 'struct stat', see 'man lstat'.
