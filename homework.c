@@ -178,6 +178,21 @@ int truncate_path (const char *path, char **truncated_path) {
     return 0;
 }
 
+/* setattr - set file or directory attributes. */
+static void set_attr(struct fs_inode inode, struct stat *sb) {
+    /* set every other bit to zero */
+    memset(sb, 0, sizeof(struct stat));
+    sb->st_mode = inode.mode;
+    sb->st_uid = inode.uid;
+    sb->st_gid = inode.gid;
+    sb->st_size = inode.size;
+    sb->st_blocks = (inode.size + FS_BLOCK_SIZE - 1) / FS_BLOCK_SIZE;
+    sb->st_nlink = 1;
+    sb->st_atime = inode.mtime;
+    sb->st_ctime = inode.ctime;
+    sb->st_mtime = inode.mtime;
+}
+
 /* getattr - get file or directory attributes. For a description of
  *  the fields in 'struct stat', see 'man lstat'.
  *
@@ -194,7 +209,16 @@ int truncate_path (const char *path, char **truncated_path) {
 int fs_getattr(const char *path, struct stat *sb)
 {
     /* your code here */
-    return -EOPNOTSUPP;
+    fs_init(NULL);
+    int inum = translate(path);
+    if (inum == -ENOENT || inum == -ENOTDIR || inum == -EOPNOTSUPP) {
+    	return inum;
+    }
+
+    struct fs_inode inode = inode_region[inum];
+    set_attr(inode, sb);
+
+    return 0;
 }
 
 /* readdir - get directory contents.
