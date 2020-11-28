@@ -27,12 +27,16 @@
 #define open(a,b) error do not use open()
 #define read(a,b,c) error do not use read()
 #define write(a,b,c) error do not use write()
+#define FILENAME_MAXLENGTH 32
 
 /* disk access. All access is in terms of 4KB blocks; read and
  * write functions return 0 (success) or -EIO.
  */
 extern int block_read(void *buf, int lba, int nblks);
 extern int block_write(void *buf, int lba, int nblks);
+
+/* global variables */
+struct fs_super superblock;
 
 /* bitmap functions
  */
@@ -59,6 +63,8 @@ int bit_test(unsigned char *map, int i)
 void* fs_init(struct fuse_conn_info *conn)
 {
     /* your code here */
+    struct fs_super sb;
+
     return NULL;
 }
 
@@ -282,6 +288,20 @@ int fs_statfs(const char *path, struct statvfs *st)
      * when this function is called.
      */
     /* your code here */
+    st->f_bsize = FS_BLOCK_SIZE;
+    int block_map = sizeof(superblock.pad);
+    st->f_blocks = superblock.disk_size - (1 + block_map);
+    
+    int i = 0, num_free_blocks = 0;
+    
+    for (i = 0; i < superblock.disk_size; i++) {
+            num_free_blocks++;
+    }
+
+    st->f_bfree = num_free_blocks;
+    st->f_bavail = num_free_blocks;
+    st->f_namemax = FILENAME_MAXLENGTH;
+
     return -EOPNOTSUPP;
 }
 
