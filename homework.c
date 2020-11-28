@@ -133,7 +133,7 @@ static int translate(const char *path) {
 
 	    father_inode = &inode_region[inode_num];
 	    int block_pos = father_inode->ptrs[0];
-        //block_read(dir, block_pos, 1)
+        //block_read(dir, block_pos, 1);
 	    int i;
 	    int found = 0;
 	    for (i = 0; i < 32; i++) {
@@ -237,7 +237,53 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
 		       off_t offset, struct fuse_file_info *fi)
 {
     /* your code here */
-    return -EOPNOTSUPP;
+    char *trancated_path;
+    int father_inum = 0;
+    // if succeeded in trancating path
+    if (trancate_path(path, &trancated_path)) {
+        father_inum = translate(trancated_path);
+    }
+
+    int inum = translate(path);
+    if (inum == -ENOTDIR || inum == -ENOENT || inum == -EOPNOTSUPP) {
+    	return inum;
+    }
+
+    if (father_inum != 0 && !inode_is_dir(father_inum, inum)) {
+    	return -ENOTDIR;
+    }
+
+
+    struct fs_inode *inode;
+    struct fs_dirent *dir;
+    inode = &inode_region[inum];
+    // check is dir
+    if(!S_ISDIR(inode->mode)) {
+        return -ENOTDIR;
+    }
+
+    dir = malloc(FS_BLOCK_SIZE);
+    int block_pos = inode->ptrs[0];
+    block_read(dir, block_pos, 1);
+    int curr_inum;
+    struct fs_inode curr_inode;
+
+    struct stat sb;
+
+    int i;
+    for (i = 0; i < 32; i++) {
+    	if (dir[i].valid == 0) {
+    	    continue;
+    	}
+
+    	curr_inum = dir[i].inode;
+        curr_inode = inode_region[curr_inum];
+    	set_attr(curr_inode, &sb);
+    	filler(ptr, dir[i].name, &sb, 0);
+    }
+    free(dir);
+    return 0;
+    
 }
 
 /* create - create a new file with specified permissions
@@ -345,7 +391,7 @@ int fs_truncate(const char *path, off_t len)
      * and an error otherwise.
      */
     if (len != 0)
-	return -EINVAL;		/* invalid argument */
+	    return -EINVAL;		/* invalid argument */
 
     /* your code here */
     return -EOPNOTSUPP;
