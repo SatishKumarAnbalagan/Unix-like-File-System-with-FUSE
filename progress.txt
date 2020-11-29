@@ -96,6 +96,9 @@ Third part - commenting, clean up & testing scripts for the source code.
 1. Find and read material and documentation about file systems and related methods.
 2. Discussed the timeline to complete the assignment.
 3. Understand the READ_ME of project 3 step by step.
+4. Discussed and understood basic project concept like address translation method, inode metadata.
+5. Understand method signature and purpose each method in the skeleton code.
+6. Consulted piazza for other confusions and got clarification on multiple problems.
 
 ## Progress
 
