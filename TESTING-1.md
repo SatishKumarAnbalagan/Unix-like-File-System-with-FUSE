@@ -150,7 +150,6 @@ First, the values returned by `getattr` in `struct stat`, for all files and dire
 "/dir3/subdir/file.8k-", 500, 500, 0100666, 8190, 1565283152, 1565283167
 "/dir3/subdir/file.12k", 500, 500, 0100666, 12288, 1565283152, 1565283167
 "/dir3/file.12k-", 0, 500, 0100777, 12287, 1565283152, 1565283167
-"/file.12k+", 0, 500, 0100666, 12289, 1565283152, 1565283167
 "/file.8k+", 500, 500, 0100666, 8195, 1565283152, 1565283167
 
 File lengths and checksums:
@@ -164,13 +163,12 @@ File lengths and checksums:
 4090922556, 8190, "/dir3/subdir/file.8k-"
 3243963207, 12288, "/dir3/subdir/file.12k"
 2954788945, 12287, "/dir3/file.12k-"
-4101348955, 12289, "/file.12k+"
 2112223143, 8195, "/file.8k+"
 
 Directory contents (for testing readdir):
 
 "/" : "dir2", "dir3", "dir-with-long-name", "file.10",
-      "file.12k+", "file.1k", "file.8k+"
+      "file.1k", "file.8k+"
 "/dir2" : "twenty-seven-byte-file-name", "file.4k+"
 "/dir3" : "subdir", "file.12k-"
 "/dir3/subdir" : "file.4k-", "file.8k-", "file.12k"
@@ -226,14 +224,13 @@ and (assuming it doesn't crash) it will mount the file system in test.img on top
     hw3$ mkdir dir
     hw3$ ./hw3fuse -image test.img dir
     hw3$ ls dir
-    dir2  dir3  dir-with-long-name  file.10  file.12k+  file.1k  file.8k+
+    dir2  dir3  dir-with-long-name  file.10  file.1k  file.8k+
     hw3$ ls -l dir
     total 7
     drwxrwxrwx 1  500  500  8192 Aug  8 12:52 dir2
     drwxrwxrwx 1 root  500  4096 Aug  8 12:52 dir3
     drwxrwxrwx 1 root root  4096 Aug  8 12:52 dir-with-long-name
     -rw-rw-rw- 1  500  500    10 Aug  8 12:52 file.10
-    -rw-rw-rw- 1 root  500 12289 Aug  8 12:52 file.12k+
     -rw-rw-rw- 1  500  500  1000 Aug  8 12:52 file.1k
     -rw-rw-rw- 1  500  500  8195 Aug  8 12:52 file.8k+
     hw3$ cd dir
