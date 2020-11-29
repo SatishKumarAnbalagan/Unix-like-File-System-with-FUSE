@@ -13,11 +13,17 @@ Team: NULL_pointer
 
 Git logs
 
-Total commits – 11 commits
-    1.Satish Kumar Anbalagan – 8 commits
+Total commits – 14 commits
+    1.Satish Kumar Anbalagan – 11 commits
     2.Chuhan Zhang –   commits
 
 satish@ubuntu:~/cs5600/cs5600-p3-file-system-null_pointer$ git log
+commit f1d0f05909d4b399dc606ccbd1d765fbde27d267 (HEAD -> dev, origin/dev)
+Author: SatishKumarAnbalagan <anbalagan.s@husky.neu.edu>
+Date:   Sat Nov 28 19:20:04 2020 -0500
+
+    directorty check
+
 commit 8b3844eff46c08e2563d97ac899a665fd5789c74 (HEAD -> dev, origin/dev)
 Author: SatishKumarAnbalagan <anbalagan.s@husky.neu.edu>
 Date:   Sat Nov 28 18:53:33 2020 -0500
@@ -107,4 +113,5 @@ Third part - commenting, clean up & testing scripts for the source code.
 8) Satish - initial fs_init function declaration & implementation.
 9) Satish - added progress report.
 10) Satish - code commenting & compilation
-11)
+11) Satish - initial directory check function
+12)
