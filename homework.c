@@ -223,6 +223,30 @@ void update_inode(int inum) {
     //block_write(&inode_region[inum - (inum % 16)], offset, 1);
 }
 
+/* check whether this inode is a directory */
+int inode_is_dir(int father_inum, int inum) {
+    struct fs_inode *inode;
+    struct fs_dirent *dir;
+    dir = malloc(FS_BLOCK_SIZE);
+
+    inode = &inode_region[father_inum];
+    int block_pos = inode->ptrs[0];
+    block_write(dir, block_pos, 1);
+    int i;
+    for (i = 0; i < 32; i++) {
+	if (dir[i].valid == 0) {
+	    continue;
+	}
+	if (dir[i].inode == inum) {
+        int result = dir[i].inode;
+        free(dir);
+	    return result;
+	}
+    }
+    free(dir);
+    return 0;
+}
+
 /* getattr - get file or directory attributes. For a description of
  *  the fields in 'struct stat', see 'man lstat'.
  *
@@ -270,7 +294,7 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     char *trancated_path;
     int father_inum = 0;
     // if succeeded in trancating path
-    if (trancate_path(path, &trancated_path)) {
+    if (truncate_path(path, &trancated_path)) {
         father_inum = translate(trancated_path);
     }
 
@@ -279,7 +303,7 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     	return inum;
     }
 
-    if (father_inum != 0 && !inode_is_dir(father_inum, inum)) {
+    if (father_inum != 0 && ! inode_is_dir(father_inum, inum)) {
     	return -ENOTDIR;
     }
 
