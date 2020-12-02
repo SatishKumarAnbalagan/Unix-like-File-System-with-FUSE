@@ -28,7 +28,7 @@ size 400
 
 # type inode name uid gid mode ctime mtime size blocks [entries]
 
-dir 2 / $root $root $d_rwx $t1 $t2 4096 399 -nothing -nothing file.1k,389 file.10,268 dir-with-long-name,253 dir2,213 dir3,238 file.12k+,327 file.8k+,59
+dir 2 / $root $root $d_rwx $t1 $t2 4096 399 -nothing -nothing file.1k,389 file.10,268 dir-with-long-name,253 dir2,213 dir3,238 file.8k+,59
 
 file 389 /file.1k $user $user $f_rw $t1 $t1 1000 365
 file 268 /file.10 $user $user $f_rw $t1 $t2 10 122
@@ -54,5 +54,4 @@ file 71 /dir3/subdir/file.12k $user $user $f_rw $t1 $t2 12288 332,151,283
 # 2575367502 1000 /dir2/twenty-seven-byte-file-name
 # 799580753 4098 /dir2/file.4k+
 # 2954788945 12287 /dir3/file.12k-
-# 4101348955 12289 /file.12k+
 # 2112223143 8195 /file.8k+
