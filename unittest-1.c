@@ -99,7 +99,11 @@ extern void block_init(char *file);
 START_TEST(getattr_sample_test) {
     struct stat *sb = malloc(sizeof(*sb));
     fs_ops.getattr("/", sb);
-    printf("gid %u", sb->st_gid);
+    printf(
+        "Actual:uid: %u \t gid: %u \t mode: %u \n size: %lu "
+        "\t ctime: %lu \t mtime: %lu\n",
+        sb->st_uid, sb->st_gid, sb->st_mode, sb->st_size, sb->st_ctim.tv_sec,
+        sb->st_mtim.tv_sec);
     ck_assert_int_eq(sb->st_gid, 0);
 }
 END_TEST
@@ -152,10 +156,11 @@ START_TEST(single_read_test) {
             "is %u\n",
             cksum_table[i].path, cksum_table[i].cksum);
         // TODO: malloc the buff  ?
-        char * buf = NULL;
+        char *buf = NULL;
         fs_ops.read(cksum_table[i].path, buf, cksum_table[i].len, 0, NULL);
         // TODO: crc32 buf type mismatch
-        unsigned cksum = crc32(0, buf, cksum_table[i].len);
+        // Cast to unsigned char avoid warning
+        unsigned cksum = crc32(0, (unsigned char *)buf, cksum_table[i].len);
         ck_assert_int_eq(cksum_table[i].cksum, cksum);
     }
 }
@@ -182,10 +187,10 @@ int main(int argc, char **argv) {
     suite_add_tcase(s, tc);
     /* TODO: Uncomment below testcases one by one.*/
 
-    // suite_add_tcase(s, tc_sample_getattr);
-    // suite_add_tcase(s, tc_getattr);
+    suite_add_tcase(s, tc_sample_getattr);
+    suite_add_tcase(s, tc_getattr);
 
-    suite_add_tcase(s, tc_single_read);
+    // suite_add_tcase(s, tc_single_read);
 
     SRunner *sr = srunner_create(s);
     srunner_set_fork_status(sr, CK_NOFORK);
