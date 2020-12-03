@@ -29,6 +29,9 @@
 #define write(a,b,c) error do not use write()
 #define FILENAME_MAXLENGTH 32
 
+#define MAX_PATH_LEN 10
+#define MAX_NAME_LEN 27
+
 /* disk access. All access is in terms of 4KB blocks; read and
  * write functions return 0 (success) or -EIO.
  */
@@ -50,7 +53,7 @@ int num_of_blocks;
 int truncate_path (const char *path, char **truncated_path);
 
 /* translate: return the inode number of given path */
-static int translate(const char *path);
+static int translate(char *path);
 
 /* bitmap functions
  */
@@ -125,63 +128,110 @@ void* fs_init(struct fuse_conn_info *conn)
  *    free(_path);
  */
 
-static int translate(const char *path) {
-    /* split the path */
-    char *_path;
-    _path = strdup(path);
-    /* traverse to path */
-    /* root father_inode */
-    int inode_num = 1;
-    struct fs_inode *father_inode;
-    struct fs_dirent *dir;
-    dir = malloc(FS_BLOCK_SIZE);
+static int parse_path(char *path, char ** pathv) {
+    // char * token = strtok(path, "/");
+    // int count = 0;
+    // while (token != NULL) {
+    //     pathv[count] = token;
+    //     count++;
+    //     token = strtok(NULL, "/");
+    // }
+    // return count;
 
-    struct fs_dirent dummy_dir = {
-	.valid = 1,
-	.inode = inode_num,
-	.name = "/",
-    };
-    struct fs_dirent *current_dir = &dummy_dir;
-
-    char *token;
-    char *delim = "/";
-    token = strtok(_path, delim);
-    int error = 0;
-    /* traverse all the subsides */
-    /* if found, return corresponding father_inode */
-    /* else, return error */
-    while (token != NULL) {
-        if (current_dir->valid == 0) {
-	        error = -ENOENT;
-            break;
-	    }
-
-	    father_inode = &inode_region[inode_num];
-	    int block_pos = father_inode->ptrs[0];
-        //block_read(dir, block_pos, 1);
-	    int i;
-	    int found = 0;
-	    for (i = 0; i < 32; i++) {
-            if (strcmp(dir[i].name, token) == 0 && dir[i].valid == 1) {
-                found = 1;
-                inode_num = dir[i].inode;
-                current_dir = &dir[i];
-            }
-	    }
-	    if (found == 0) {
-            error = -ENOENT;
-            break;
-	    }
-        token = strtok(NULL, delim);
+    int i;
+    for (i = 0; i < MAX_PATH_LEN; i++) {
+        if ((pathv[i] = strtok(path, "/")) == NULL) break;
+        if (strlen(pathv[i]) > MAX_NAME_LEN)
+            pathv[i][MAX_NAME_LEN] = 0;  // truncate to 27 characters
+        path = NULL;
     }
-
-    free(dir);
-    free(_path);
-    if (error != 0) {
-        return error;
-    }
-    return inode_num;
+    return i;
 }
+
+static int translate(char * path) {
+    char *pathv[10];
+    int pathc = parse_path(path, pathv);
+    int inum = 2; // root inode 
+    for (int i = 0; i < pathc; i++) {
+        printf("token: %s \t", pathv[i]);
+        struct fs_inode _in;
+        block_read(&_in, inum, 1);
+        if (!S_ISDIR(_in.mode)) {
+            return -ENOTDIR;
+        }
+        int blknum = _in.ptrs[0]; // ptrs are a list of block numbers
+        struct fs_dirent des[128];
+        block_read(des, blknum, 1);
+        int entry_found = 0;
+        for (int j = 0; j < 128; j++) {
+            if (des[j].valid && strcmp(des[j].name, pathv[i]) == 0) {
+                inum = des[j].inode;
+                entry_found = 1;
+                break;
+            }
+        }  
+        if (!entry_found) return -ENOENT;
+    }  
+    return inum;
+}
+
+// static int translate(const char *path) {
+//     /* split the path */
+//     char *_path;
+//     _path = strdup(path);
+//     /* traverse to path */
+//     /* root father_inode */
+//     int inode_num = 1;
+//     struct fs_inode *father_inode;
+//     struct fs_dirent *dir;
+//     dir = malloc(FS_BLOCK_SIZE);
+
+//     struct fs_dirent dummy_dir = {
+// 	.valid = 1,
+// 	.inode = inode_num,
+// 	.name = "/",
+//     };
+//     struct fs_dirent *current_dir = &dummy_dir;
+
+//     char *token;
+//     char *delim = "/";
+//     token = strtok(_path, delim);
+//     int error = 0;
+//     /* traverse all the subsides */
+//     /* if found, return corresponding father_inode */
+//     /* else, return error */
+//     while (token != NULL) {
+//         if (current_dir->valid == 0) {
+// 	        error = -ENOENT;
+//             break;
+// 	    }
+
+// 	    father_inode = &inode_region[inode_num];
+// 	    int block_pos = father_inode->ptrs[0];
+//         //block_read(dir, block_pos, 1);
+// 	    int i;
+// 	    int found = 0;
+// 	    for (i = 0; i < 32; i++) {
+//             if (strcmp(dir[i].name, token) == 0 && dir[i].valid == 1) {
+//                 found = 1;
+//                 inode_num = dir[i].inode;
+//                 current_dir = &dir[i];
+//             }
+// 	    }
+// 	    if (found == 0) {
+//             error = -ENOENT;
+//             break;
+// 	    }
+//         token = strtok(NULL, delim);
+//     }
+
+//     free(dir);
+//     free(_path);
+//     if (error != 0) {
+//         return error;
+//     }
+//     return inode_num;
+// }
 
 int truncate_path (const char *path, char **truncated_path) {
     int i = strlen(path) - 1;
@@ -264,12 +314,15 @@ int fs_getattr(const char *path, struct stat *sb)
 {
     /* your code here */
     fs_init(NULL);
-    int inum = translate(path);
+    char * _path = strdup(path);
+    int inum = translate(_path);
+    free(_path);
     if (inum == -ENOENT || inum == -ENOTDIR || inum == -EOPNOTSUPP) {
     	return inum;
     }
 
-    struct fs_inode inode = inode_region[inum];
+    struct fs_inode inode;
+    block_read(&inode, inum, 1);
     set_attr(inode, sb);
 
     return 0;
@@ -297,8 +350,9 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     if (truncate_path(path, &trancated_path)) {
         father_inum = translate(trancated_path);
     }
-
-    int inum = translate(path);
+    char * _path = strdup(path);
+    int inum = translate(_path);
+    free(_path);
     if (inum == -ENOTDIR || inum == -ENOENT || inum == -EOPNOTSUPP) {
     	return inum;
     }
