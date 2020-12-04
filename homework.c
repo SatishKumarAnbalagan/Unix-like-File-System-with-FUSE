@@ -9,28 +9,29 @@
 #define FUSE_USE_VERSION 27
 #define _FILE_OFFSET_BITS 64
 
-#include <stdlib.h>
-#include <stddef.h>
-#include <unistd.h>
-#include <fuse.h>
-#include <fcntl.h>
-#include <string.h>
-#include <stdio.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <fuse.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "fs5600.h"
 
-/* if you don't understand why you can't use these system calls here, 
+/* if you don't understand why you can't use these system calls here,
  * you need to read the assignment description another time
  */
-#define stat(a,b) error do not use stat()
-#define open(a,b) error do not use open()
-#define read(a,b,c) error do not use read()
-#define write(a,b,c) error do not use write()
+#define stat(a, b) error do not use stat()
+#define open(a, b) error do not use open()
+#define read(a, b, c) error do not use read()
+#define write(a, b, c) error do not use write()
 #define FILENAME_MAXLENGTH 32
 
 #define MAX_PATH_LEN 10
 #define MAX_NAME_LEN 27
+#define MAX_DIREN_NUM 128
 
 /* disk access. All access is in terms of 4KB blocks; read and
  * write functions return 0 (success) or -EIO.
@@ -42,7 +43,7 @@ extern int block_write(void *buf, int lba, int nblks);
 fd_set *inode_map;
 fd_set *block_map;
 struct fs_super superblock;
-struct fs_inode *inode_region;	/* inodes in memory */
+struct fs_inode *inode_region; /* inodes in memory */
 int inode_map_sz;
 int block_map_sz;
 int num_of_blocks;
@@ -50,26 +51,16 @@ int num_of_blocks;
 /* function declaration */
 
 /* truncate the last token from path return 1 if succeed, 0 if not*/
-int truncate_path (const char *path, char **truncated_path);
+int truncate_path(const char *path, char **truncated_path);
 
 /* translate: return the inode number of given path */
 static int translate(char *path);
 
 /* bitmap functions
  */
-void bit_set(unsigned char *map, int i)
-{
-    map[i/8] |= (1 << (i%8));
-}
-void bit_clear(unsigned char *map, int i)
-{
-    map[i/8] &= ~(1 << (i%8));
-}
-int bit_test(unsigned char *map, int i)
-{
-    return map[i/8] & (1 << (i%8));
-}
-
+void bit_set(unsigned char *map, int i) { map[i / 8] |= (1 << (i % 8)); }
+void bit_clear(unsigned char *map, int i) { map[i / 8] &= ~(1 << (i % 8)); }
+int bit_test(unsigned char *map, int i) { return map[i / 8] & (1 << (i % 8)); }
 
 /* init - this is called once by the FUSE framework at startup. Ignore
  * the 'conn' argument.
@@ -77,8 +68,7 @@ int bit_test(unsigned char *map, int i)
  *   - read superblock
  *   - allocate memory, read bitmaps and inodes
  */
-void* fs_init(struct fuse_conn_info *conn)
-{
+void *fs_init(struct fuse_conn_info *conn) {
     // /* your code here */
     // struct fs_super sb;
     // /* here 1 stands for block size, here is 4096 bytes */
@@ -128,7 +118,7 @@ void* fs_init(struct fuse_conn_info *conn)
  *    free(_path);
  */
 
-static int parse_path(char *path, char ** pathv) {
+static int parse_path(char *path, char **pathv) {
     // char * token = strtok(path, "/");
     // int count = 0;
     // while (token != NULL) {
@@ -148,10 +138,10 @@ static int parse_path(char *path, char ** pathv) {
     return i;
 }
 
-static int translate(char * path) {
+static int translate(char *path) {
     char *pathv[10];
     int pathc = parse_path(path, pathv);
-    int inum = 2; // root inode 
+    int inum = 2;  // root inode
     for (int i = 0; i < pathc; i++) {
         printf("token: %s \t", pathv[i]);
         struct fs_inode _in;
@@ -159,19 +149,19 @@ static int translate(char * path) {
         if (!S_ISDIR(_in.mode)) {
             return -ENOTDIR;
         }
-        int blknum = _in.ptrs[0]; // ptrs are a list of block numbers
-        struct fs_dirent des[128];
+        int blknum = _in.ptrs[0];  // ptrs are a list of block numbers
+        struct fs_dirent des[MAX_DIREN_NUM];
         block_read(des, blknum, 1);
         int entry_found = 0;
-        for (int j = 0; j < 128; j++) {
+        for (int j = 0; j < MAX_DIREN_NUM; j++) {
             if (des[j].valid && strcmp(des[j].name, pathv[i]) == 0) {
                 inum = des[j].inode;
                 entry_found = 1;
                 break;
             }
-        }  
+        }
         if (!entry_found) return -ENOENT;
-    }  
+    }
     return inum;
 }
 
@@ -233,7 +223,7 @@ static int translate(char * path) {
 //     return inode_num;
 // }
 
-int truncate_path (const char *path, char **truncated_path) {
+int truncate_path(const char *path, char **truncated_path) {
     int i = strlen(path) - 1;
     // strip the tailling '/'
     // deal with '///' case
@@ -243,12 +233,12 @@ int truncate_path (const char *path, char **truncated_path) {
         }
     }
     for (; i >= 0; i--) {
-    	if (path[i] == '/') {
-            *truncated_path = (char*)malloc(sizeof(char) * (i + 2));
+        if (path[i] == '/') {
+            *truncated_path = (char *)malloc(sizeof(char) * (i + 2));
             memcpy(*truncated_path, path, i + 1);
             (*truncated_path)[i + 1] = '\0';
             return 1;
-    	}
+        }
     }
     return 0;
 }
@@ -270,7 +260,7 @@ static void set_attr(struct fs_inode inode, struct stat *sb) {
 
 void update_inode(int inum) {
     int offset = 1 + inode_map_sz + block_map_sz + (inum / 16);
-    //block_write(&inode_region[inum - (inum % 16)], offset, 1);
+    // block_write(&inode_region[inum - (inum % 16)], offset, 1);
 }
 
 /* check whether this inode is a directory */
@@ -284,14 +274,14 @@ int inode_is_dir(int father_inum, int inum) {
     block_write(dir, block_pos, 1);
     int i;
     for (i = 0; i < 32; i++) {
-	if (dir[i].valid == 0) {
-	    continue;
-	}
-	if (dir[i].inode == inum) {
-        int result = dir[i].inode;
-        free(dir);
-	    return result;
-	}
+        if (dir[i].valid == 0) {
+            continue;
+        }
+        if (dir[i].inode == inum) {
+            int result = dir[i].inode;
+            free(dir);
+            return result;
+        }
     }
     free(dir);
     return 0;
@@ -310,15 +300,14 @@ int inode_is_dir(int father_inum, int inum) {
  * hint - factor out inode-to-struct stat conversion - you'll use it
  *        again in readdir
  */
-int fs_getattr(const char *path, struct stat *sb)
-{
+int fs_getattr(const char *path, struct stat *sb) {
     /* your code here */
     fs_init(NULL);
-    char * _path = strdup(path);
+    char *_path = strdup(path);
     int inum = translate(_path);
     free(_path);
     if (inum == -ENOENT || inum == -ENOTDIR || inum == -EOPNOTSUPP) {
-    	return inum;
+        return inum;
     }
 
     struct fs_inode inode;
@@ -330,69 +319,93 @@ int fs_getattr(const char *path, struct stat *sb)
 
 /* readdir - get directory contents.
  *
- * call the 'filler' function once for each valid entry in the 
+ * call the 'filler' function once for each valid entry in the
  * directory, as follows:
  *     filler(buf, <name>, <statbuf>, 0)
  * where <statbuf> is a pointer to a struct stat
  * success - return 0
  * errors - path resolution, ENOTDIR, ENOENT
- * 
+ *
  * hint - check the testing instructions if you don't understand how
  *        to call the filler function
  */
 int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
-		       off_t offset, struct fuse_file_info *fi)
-{
-    /* your code here */
-    char *trancated_path;
-    int father_inum = 0;
-    // if succeeded in trancating path
-    if (truncate_path(path, &trancated_path)) {
-        father_inum = translate(trancated_path);
-    }
-    char * _path = strdup(path);
+               off_t offset, struct fuse_file_info *fi) {
+    char *_path = strdup(path);
     int inum = translate(_path);
     free(_path);
     if (inum == -ENOTDIR || inum == -ENOENT || inum == -EOPNOTSUPP) {
-    	return inum;
+        return inum;
     }
+    struct fs_inode _in;
+    block_read(&_in, inum, 1);
+    int blknum = _in.ptrs[0];  // ptrs are a list of block numbers
 
-    if (father_inum != 0 && ! inode_is_dir(father_inum, inum)) {
-    	return -ENOTDIR;
-    }
-
-
-    struct fs_inode *inode;
-    struct fs_dirent *dir;
-    inode = &inode_region[inum];
-    // check is dir
-    if(!S_ISDIR(inode->mode)) {
-        return -ENOTDIR;
-    }
-
-    dir = malloc(FS_BLOCK_SIZE);
-    int block_pos = inode->ptrs[0];
-    block_read(dir, block_pos, 1);
-    int curr_inum;
-    struct fs_inode curr_inode;
-
+    struct fs_dirent des[MAX_DIREN_NUM];
     struct stat sb;
-
-    int i;
-    for (i = 0; i < 32; i++) {
-    	if (dir[i].valid == 0) {
-    	    continue;
-    	}
-
-    	curr_inum = dir[i].inode;
-        curr_inode = inode_region[curr_inum];
-    	set_attr(curr_inode, &sb);
-    	filler(ptr, dir[i].name, &sb, 0);
+    block_read(des, blknum, 1);
+    // filler prototype
+    // int test_filler(void *ptr, const char *name, const struct stat *st, off_t
+    // off)
+    for (int i = 0; i < MAX_DIREN_NUM; i++) {
+        if (des[i].valid) {
+            set_attr(_in, &sb);
+            filler(ptr, des[i].name, &sb, 0);
+        }
     }
-    free(dir);
     return 0;
-    
 }
+
+// int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
+//                off_t offset, struct fuse_file_info *fi) {
+//     /* your code here */
+//     char *trancated_path;
+//     int father_inum = 0;
+//     // if succeeded in trancating path
+//     if (truncate_path(path, &trancated_path)) {
+//         father_inum = translate(trancated_path);
+//     }
+//     char *_path = strdup(path);
+//     int inum = translate(_path);
+//     free(_path);
+//     if (inum == -ENOTDIR || inum == -ENOENT || inum == -EOPNOTSUPP) {
+//         return inum;
+//     }
+
+//     if (father_inum != 0 && !inode_is_dir(father_inum, inum)) {
+//         return -ENOTDIR;
+//     }
+
+//     struct fs_inode *inode;
+//     struct fs_dirent *dir;
+//     inode = &inode_region[inum];
+//     // check is dir
+//     if (!S_ISDIR(inode->mode)) {
+//         return -ENOTDIR;
+//     }
+
+//     dir = malloc(FS_BLOCK_SIZE);
+//     int block_pos = inode->ptrs[0];
+//     block_read(dir, block_pos, 1);
+//     int curr_inum;
+//     struct fs_inode curr_inode;
+
+//     struct stat sb;
+
+//     int i;
+//     for (i = 0; i < 32; i++) {
+//         if (dir[i].valid == 0) {
+//             continue;
+//         }
+
+//         curr_inum = dir[i].inode;
+//         curr_inode = inode_region[curr_inum];
+//         set_attr(curr_inode, &sb);
+//         filler(ptr, dir[i].name, &sb, 0);
+//     }
+//     free(dir);
+//     return 0;
+// }
 
 /* create - create a new file with specified permissions
  *
@@ -408,8 +421,7 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
  * If there are already 128 entries in the directory (i.e. it's filled an
  * entire block), you are free to return -ENOSPC instead of expanding it.
  */
-int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
-{
+int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     /* your code here */
     return -EOPNOTSUPP;
 }
@@ -421,21 +433,18 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
  *
  * success - return 0
  * Errors - path resolution, EEXIST
- * Conditions for EEXIST are the same as for create. 
- */ 
-int fs_mkdir(const char *path, mode_t mode)
-{
+ * Conditions for EEXIST are the same as for create.
+ */
+int fs_mkdir(const char *path, mode_t mode) {
     /* your code here */
     return -EOPNOTSUPP;
 }
-
 
 /* unlink - delete a file
  *  success - return 0
  *  errors - path resolution, ENOENT, EISDIR
  */
-int fs_unlink(const char *path)
-{
+int fs_unlink(const char *path) {
     /* your code here */
     return -EOPNOTSUPP;
 }
@@ -444,8 +453,7 @@ int fs_unlink(const char *path)
  *  success - return 0
  *  Errors - path resolution, ENOENT, ENOTDIR, ENOTEMPTY
  */
-int fs_rmdir(const char *path)
-{
+int fs_rmdir(const char *path) {
     /* your code here */
     return -EOPNOTSUPP;
 }
@@ -463,8 +471,7 @@ int fs_rmdir(const char *path)
  * particular, the full version can move across directories, replace a
  * destination file, and replace an empty directory with a full one.
  */
-int fs_rename(const char *src_path, const char *dst_path)
-{
+int fs_rename(const char *src_path, const char *dst_path) {
     /* your code here */
     return -EOPNOTSUPP;
 }
@@ -476,13 +483,13 @@ int fs_rename(const char *src_path, const char *dst_path)
  * success - return 0
  * Errors - path resolution, ENOENT.
  */
-int fs_chmod(const char *path, mode_t mode)
-{
+int fs_chmod(const char *path, mode_t mode) {
     /* your code here */
-    int inum = translate(path);
-
+    char *_path = strdup(path);
+    int inum = translate(_path);
+    free(_path);
     if (inum < 0) {
-    	return inum;
+        return inum;
     }
 
     struct fs_inode *inode;
@@ -494,8 +501,7 @@ int fs_chmod(const char *path, mode_t mode)
     return 0;
 }
 
-int fs_utime(const char *path, struct utimbuf *ut)
-{
+int fs_utime(const char *path, struct utimbuf *ut) {
     /* your code here */
     return -EOPNOTSUPP;
 }
@@ -505,18 +511,15 @@ int fs_utime(const char *path, struct utimbuf *ut)
  * Errors - path resolution, ENOENT, EISDIR, EINVAL
  *    return EINVAL if len > 0.
  */
-int fs_truncate(const char *path, off_t len)
-{
+int fs_truncate(const char *path, off_t len) {
     /* you can cheat by only implementing this for the case of len==0,
      * and an error otherwise.
      */
-    if (len != 0)
-	    return -EINVAL;		/* invalid argument */
+    if (len != 0) return -EINVAL; /* invalid argument */
 
     /* your code here */
     return -EOPNOTSUPP;
 }
-
 
 /* read - read data from an open file.
  * success: should return exactly the number of bytes requested, except:
@@ -526,8 +529,7 @@ int fs_truncate(const char *path, off_t len)
  * Errors - path resolution, ENOENT, EISDIR
  */
 int fs_read(const char *path, char *buf, size_t len, off_t offset,
-	    struct fuse_file_info *fi)
-{
+            struct fuse_file_info *fi) {
     /* your code here */
     return -EOPNOTSUPP;
 }
@@ -537,12 +539,11 @@ int fs_read(const char *path, char *buf, size_t len, off_t offset,
  *           the number requested, or else it's an error)
  * Errors - path resolution, ENOENT, EISDIR
  *  return EINVAL if 'offset' is greater than current file length.
- *  (POSIX semantics support the creation of files with "holes" in them, 
+ *  (POSIX semantics support the creation of files with "holes" in them,
  *   but we don't)
  */
-int fs_write(const char *path, const char *buf, size_t len,
-	     off_t offset, struct fuse_file_info *fi)
-{
+int fs_write(const char *path, const char *buf, size_t len, off_t offset,
+             struct fuse_file_info *fi) {
     /* your code here */
     return -EOPNOTSUPP;
 }
@@ -551,8 +552,7 @@ int fs_write(const char *path, const char *buf, size_t len,
  * see 'man 2 statfs' for description of 'struct statvfs'.
  * Errors - none. Needs to work.
  */
-int fs_statfs(const char *path, struct statvfs *st)
-{
+int fs_statfs(const char *path, struct statvfs *st) {
     /* needs to return the following fields (set others to zero):
      *   f_bsize = BLOCK_SIZE
      *   f_blocks = total image - (superblock + block map)
@@ -567,11 +567,11 @@ int fs_statfs(const char *path, struct statvfs *st)
     st->f_bsize = FS_BLOCK_SIZE;
     int block_map = sizeof(superblock.pad);
     st->f_blocks = superblock.disk_size - (1 + block_map);
-    
+
     int i = 0, num_free_blocks = 0;
-    
+
     for (i = 0; i < superblock.disk_size; i++) {
-            num_free_blocks++;
+        num_free_blocks++;
     }
 
     st->f_bfree = num_free_blocks;
@@ -584,7 +584,7 @@ int fs_statfs(const char *path, struct statvfs *st)
 /* operations vector. Please don't rename it, or else you'll break things
  */
 struct fuse_operations fs_ops = {
-    .init = fs_init,            /* read-mostly operations */
+    .init = fs_init, /* read-mostly operations */
     .getattr = fs_getattr,
     .readdir = fs_readdir,
     .rename = fs_rename,
@@ -592,7 +592,7 @@ struct fuse_operations fs_ops = {
     .read = fs_read,
     .statfs = fs_statfs,
 
-    .create = fs_create,        /* write operations */
+    .create = fs_create, /* write operations */
     .mkdir = fs_mkdir,
     .unlink = fs_unlink,
     .rmdir = fs_rmdir,
@@ -600,4 +600,3 @@ struct fuse_operations fs_ops = {
     .truncate = fs_truncate,
     .write = fs_write,
 };
-
