@@ -67,6 +67,22 @@ cksum_t cksum_table[] = {
     {2954788945, 12287, "/dir3/file.12k-"},
     {2112223143, 8195, "/file.8k+"}};
 
+typedef struct {
+    char *name;
+    int seen;
+} direntry_t;
+
+direntry_t root_table[] = {
+    {"dir2", 0},    {"dir3", 0},    {"dir-with-long-name", 0},
+    {"file.10", 0}, {"file.1k", 0}, {"file.8k+"},
+    {NULL}};
+direntry_t dir2_table[] = {
+    {"twenty-seven-byte-file-name", 0}, {"file.4k+", 0}, {NULL}};
+direntry_t dir3_table[] = {{"subdir", 0}, {"file.12k-", 0}, {NULL}};
+direntry_t dir3sub_table[] = {
+    {"file.4k-", 0}, {"file.8k-", 0}, {"file.12k", 0}, {NULL}};
+direntry_t dirlongname_table[] = {{"file.12k+", 0}, {NULL}};
+
 /* change test name and make it do something useful */
 START_TEST(a_test) { ck_assert_int_eq(1, 1); }
 END_TEST
@@ -147,22 +163,18 @@ END_TEST
 
 START_TEST(getattr_error_test) {
     int count = 4;
-    char *paths[] = {
-        "/not-a-file",
-        "/file.1k/file.0",
-        "/not-a-dir/file.0",
-        "/dir2/not-a-file"
-    };
+    char *paths[] = {"/not-a-file", "/file.1k/file.0", "/not-a-dir/file.0",
+                     "/dir2/not-a-file"};
     int expected_error[] = {ENOENT, ENOTDIR, ENOENT, ENOENT};
     for (int i = 0; i < count; i++) {
-        printf("path is %s, expect error is %d \n", paths[i], expected_error[i]);
+        printf("path is %s, expect error is %d \n", paths[i],
+               expected_error[i]);
         struct stat *sb = malloc(sizeof(*sb));
         int error = fs_ops.getattr(paths[i], sb);
         printf("Actual error: %d \n", error);
         ck_assert_int_eq(expected_error[i], -error);
         free(sb);
     }
-
 }
 END_TEST
 
@@ -189,6 +201,60 @@ START_TEST(single_read_test) {
 }
 END_TEST
 
+int test_filler(void *ptr, const char *name, const struct stat *st, off_t off) {
+    direntry_t *table = ptr;
+
+    printf("file: %s, mode: %o\n", name, st->st_mode);
+    for (int i = 0; table[i].name != NULL; i++) {
+        if (strcmp(table[i].name, name) == 0) {
+            table[i].seen = 1;
+
+            return 0;
+        }
+    }
+    printf("actual directory entry: %s not found in expected.", name);
+    ck_abort();
+    return 1;
+}
+
+void readdir_test_helper(direntry_t *table, char *path) {
+    printf("Expected entries:");
+    int i = 0;
+    for (i = 0; table[i].name != NULL; i++) {
+        printf(" %s", table[i].name);
+    }
+    printf("\nActual entries: ");
+    fs_ops.readdir(path, table, test_filler, 0, NULL);
+
+    for (i = 0; table[i].name != NULL; i++) {
+        if (!table[i].seen) {
+            printf("entry: %s isn't seen in readdir: %s\n ", table[i].name,
+                   path);
+            ck_abort();
+        }
+    }
+}
+
+/*  * success - return 0
+ * errors - path resolution, ENOTDIR, ENOENT
+ *
+ * hint - check the testing instructions if you don't understand how
+ *        to call the filler function
+ */
+// int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
+//                off_t offset, struct fuse_file_info *fi)
+START_TEST(readdir_test) {
+    char *paths[] = {"/", "/dir2", "/dir3", "/dir3/subdir",
+                     "/dir-with-long-name"};
+    direntry_t *tables[] = {root_table, dir2_table, dir3_table, dir3sub_table,
+                            dirlongname_table};
+    for (int i = 0; i < 5; i++) {
+        printf("\nreaddir path: %s\n", paths[i]);
+        readdir_test_helper(tables[i], paths[i]);
+    }
+}
+END_TEST
+
 int main(int argc, char **argv) {
     block_init("test.img");
     fs_ops.init(NULL);
@@ -199,6 +265,8 @@ int main(int argc, char **argv) {
     TCase *tc_getattr = tcase_create("get_attr test");
     TCase *tc_getattr_error = tcase_create("get_attr translation error test");
 
+    TCase *tc_readir = tcase_create("readdir test");
+
     TCase *tc_single_read = tcase_create("single read test");
 
     tcase_add_test(tc, a_test); /* see START_TEST above */
@@ -207,13 +275,16 @@ int main(int argc, char **argv) {
     tcase_add_test(tc_getattr, getattr_test);
     tcase_add_test(tc_getattr_error, getattr_error_test);
     tcase_add_test(tc_single_read, single_read_test);
+    tcase_add_test(tc_readir, readdir_test);
 
-    suite_add_tcase(s, tc);
+    // suite_add_tcase(s, tc);
     /* TODO: Uncomment below testcases one by one.*/
 
-    suite_add_tcase(s, tc_sample_getattr);
-    suite_add_tcase(s, tc_getattr);
-    suite_add_tcase(s, tc_getattr_error);
+    // suite_add_tcase(s, tc_sample_getattr);
+    // suite_add_tcase(s, tc_getattr);
+    // suite_add_tcase(s, tc_getattr_error);
+
+    suite_add_tcase(s, tc_readir);
 
     // suite_add_tcase(s, tc_single_read);
 
