@@ -194,9 +194,13 @@ START_TEST(single_read_test) {
         fs_ops.read(cksum_table[i].path, buf, cksum_table[i].len, 0, NULL);
         // TODO: crc32 buf type mismatch
         // Cast to unsigned char avoid warning
+        // if (i == 1) {
+        //     printf("read file content: %s\n", buf);
+        // }
         unsigned cksum = crc32(0, (unsigned char *)buf, cksum_table[i].len);
         printf(" Actual: checksum is %u \n", cksum);
         ck_assert_int_eq(cksum_table[i].cksum, cksum);
+        free(buf);
     }
 }
 END_TEST
@@ -263,6 +267,57 @@ START_TEST(readdir_error_test) {
 }
 END_TEST
 
+START_TEST(fsread_small_read_test) {
+    int i = 0;
+    int steps[] = {17, 100, 1000, 1024, 1970, 3000};
+    for (i = 0; cksum_table[i].path != NULL; i++) {
+        printf(
+            "\nPath is %s\t small chunk reads \n Expected: checksum "
+            "is %u\n",
+            cksum_table[i].path, cksum_table[i].cksum);
+
+        for (int j = 0; j < 6; j++) {
+            int file_len = cksum_table[i].len;
+            char *buf = malloc(sizeof(char) * cksum_table[i].len);
+            for (int offset = 0; offset < file_len; offset += steps[j]) {
+                fs_ops.read(cksum_table[i].path, buf + offset, steps[j], offset,
+                            NULL);
+            }
+            // TODO: crc32 buf type mismatch
+            // Cast to unsigned char avoid warning
+            unsigned cksum = crc32(0, (unsigned char *)buf, cksum_table[i].len);
+            printf(" Actual: checksum is %u for chuck size: %d\n", cksum,
+                   steps[j]);
+            ck_assert_int_eq(cksum_table[i].cksum, cksum);
+            free(buf);
+        }
+    }
+}
+END_TEST
+
+START_TEST(fsread_chunck_sample_test) {
+    int i = 0;
+    printf(
+        "\nPath is %s\t small chunk reads \n Expected: checksum "
+        "is %u\n",
+        cksum_table[i].path, cksum_table[i].cksum);
+
+    int file_len = cksum_table[i].len;
+    char *buf = malloc(sizeof(char) * cksum_table[i].len);
+    int step = 17;
+    for (int offset = 0; offset < file_len; offset += step) {
+        printf("read param: step: %d, offset: %d \n", step, offset);
+        fs_ops.read(cksum_table[i].path, buf + offset, step, offset, NULL);
+    }
+    // TODO: crc32 buf type mismatch
+    // Cast to unsigned char avoid warning
+    unsigned cksum = crc32(0, (unsigned char *)buf, cksum_table[i].len);
+    printf(" Actual: checksum is %u for chuck size: %d\n", cksum, step);
+    printf(" Read result: %s\n", buf);
+    ck_assert_int_eq(cksum_table[i].cksum, cksum);
+}
+END_TEST
+
 int main(int argc, char **argv) {
     block_init("test.img");
     fs_ops.init(NULL);
@@ -277,6 +332,7 @@ int main(int argc, char **argv) {
     TCase *tc_readdir_error = tcase_create("readdir error test");
 
     TCase *tc_single_read = tcase_create("single read test");
+    TCase *tc_chunk_read = tcase_create("chuck read test");
 
     tcase_add_test(tc, a_test); /* see START_TEST above */
     /* add more tests here */
@@ -286,21 +342,23 @@ int main(int argc, char **argv) {
     tcase_add_test(tc_single_read, single_read_test);
     tcase_add_test(tc_readir, readdir_test);
     tcase_add_test(tc_readdir_error, readdir_error_test);
+    tcase_add_test(tc_chunk_read, fsread_small_read_test);
 
     // suite_add_tcase(s, tc);
     /* TODO: Uncomment below testcases one by one.*/
 
-    // suite_add_tcase(s, tc_sample_getattr);
-    // suite_add_tcase(s, tc_getattr);
-    // suite_add_tcase(s, tc_getattr_error);
+    suite_add_tcase(s, tc_sample_getattr);
+    suite_add_tcase(s, tc_getattr);
+    suite_add_tcase(s, tc_getattr_error);
 
-    // suite_add_tcase(s, tc_readir);
+    suite_add_tcase(s, tc_readir);
 
-    // suite_add_tcase(s, tc_readdir_error);
-    //suite_add_tcase(s, tc_single_read);
+    suite_add_tcase(s, tc_readdir_error);
+    suite_add_tcase(s, tc_single_read);
+    suite_add_tcase(s, tc_chunk_read);
 
     SRunner *sr = srunner_create(s);
-    srunner_set_fork_status(sr, CK_NOFORK);
+    // srunner_set_fork_status(sr, CK_NOFORK);
 
     srunner_run_all(sr, CK_VERBOSE);
     int n_failed = srunner_ntests_failed(sr);
