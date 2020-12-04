@@ -187,15 +187,15 @@ START_TEST(single_read_test) {
     int i = 0;
     for (i = 0; cksum_table[i].path != NULL; i++) {
         printf(
-            "Path is %s\t read whole file \n Expected: checksum "
+            "\nPath is %s\t read whole file \n Expected: checksum "
             "is %u\n",
             cksum_table[i].path, cksum_table[i].cksum);
-        // TODO: malloc the buff  ?
-        char *buf = NULL;
+        char *buf = malloc(sizeof(char) * cksum_table[i].len);
         fs_ops.read(cksum_table[i].path, buf, cksum_table[i].len, 0, NULL);
         // TODO: crc32 buf type mismatch
         // Cast to unsigned char avoid warning
         unsigned cksum = crc32(0, (unsigned char *)buf, cksum_table[i].len);
+        printf(" Actual: checksum is %u \n", cksum);
         ck_assert_int_eq(cksum_table[i].cksum, cksum);
     }
 }
@@ -290,14 +290,14 @@ int main(int argc, char **argv) {
     // suite_add_tcase(s, tc);
     /* TODO: Uncomment below testcases one by one.*/
 
-    suite_add_tcase(s, tc_sample_getattr);
-    suite_add_tcase(s, tc_getattr);
-    suite_add_tcase(s, tc_getattr_error);
+    // suite_add_tcase(s, tc_sample_getattr);
+    // suite_add_tcase(s, tc_getattr);
+    // suite_add_tcase(s, tc_getattr_error);
 
-    suite_add_tcase(s, tc_readir);
-    
-    suite_add_tcase(s, tc_readdir_error);
-    // suite_add_tcase(s, tc_single_read);
+    // suite_add_tcase(s, tc_readir);
+
+    // suite_add_tcase(s, tc_readdir_error);
+    //suite_add_tcase(s, tc_single_read);
 
     SRunner *sr = srunner_create(s);
     srunner_set_fork_status(sr, CK_NOFORK);
