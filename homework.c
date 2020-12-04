@@ -40,9 +40,11 @@ extern int block_read(void *buf, int lba, int nblks);
 extern int block_write(void *buf, int lba, int nblks);
 
 /* global variables */
+struct fs_super superblock;
+unsigned char bitmap[FS_BLOCK_SIZE];
 fd_set *inode_map;
 fd_set *block_map;
-struct fs_super superblock;
+
 struct fs_inode *inode_region; /* inodes in memory */
 int inode_map_sz;
 int block_map_sz;
@@ -77,16 +79,15 @@ int bit_test(unsigned char *map, int i) { return map[i / 8] & (1 << (i % 8)); }
  * inodes in memory."
  */
 void *fs_init(struct fuse_conn_info *conn) {
-    // /* your code here */
-    // struct fs_super sb;
-    // /* here 1 stands for block size, here is 4096 bytes */
-    // block_read(&sb, 0, 1);
+    /* your code here */
+    /* here 1 stands for block size, here is 4096 bytes */
+    block_read(&superblock, 0, 1);
+    int super_blck_num = superblock.disk_size;
 
-    // /* read bitmaps */
-    // inode_map = sb.pad;
-    // block_read(inode_map, 1, sb.disk_size);
-    // inode_map_sz = sb.disk_size;
-    // // printf("%d\n", inode_map_sz);
+    /* read bitmaps */
+    block_read(&bitmap, 1, 1);
+
+    // printf("%d\n", inode_map_sz);
 
     // block_map = malloc(sb.disk_size * FS_BLOCK_SIZE);
     // block_read(block_map, sb.disk_size + 1, sb.disk_size * FS_BLOCK_SIZE);
@@ -171,64 +172,6 @@ static int translate(char *path) {
     }
     return inum;
 }
-
-// static int translate(const char *path) {
-//     /* split the path */
-//     char *_path;
-//     _path = strdup(path);
-//     /* traverse to path */
-//     /* root father_inode */
-//     int inode_num = 1;
-//     struct fs_inode *father_inode;
-//     struct fs_dirent *dir;
-//     dir = malloc(FS_BLOCK_SIZE);
-
-//     struct fs_dirent dummy_dir = {
-// 	.valid = 1,
-// 	.inode = inode_num,
-// 	.name = "/",
-//     };
-//     struct fs_dirent *current_dir = &dummy_dir;
-
-//     char *token;
-//     char *delim = "/";
-//     token = strtok(_path, delim);
-//     int error = 0;
-//     /* traverse all the subsides */
-//     /* if found, return corresponding father_inode */
-//     /* else, return error */
-//     while (token != NULL) {
-//         if (current_dir->valid == 0) {
-// 	        error = -ENOENT;
-//             break;
-// 	    }
-
-// 	    father_inode = &inode_region[inode_num];
-// 	    int block_pos = father_inode->ptrs[0];
-//         //block_read(dir, block_pos, 1);
-// 	    int i;
-// 	    int found = 0;
-// 	    for (i = 0; i < 32; i++) {
-//             if (strcmp(dir[i].name, token) == 0 && dir[i].valid == 1) {
-//                 found = 1;
-//                 inode_num = dir[i].inode;
-//                 current_dir = &dir[i];
-//             }
-// 	    }
-// 	    if (found == 0) {
-//             error = -ENOENT;
-//             break;
-// 	    }
-//         token = strtok(NULL, delim);
-//     }
-
-//     free(dir);
-//     free(_path);
-//     if (error != 0) {
-//         return error;
-//     }
-//     return inode_num;
-// }
 
 int truncate_path(const char *path, char **truncated_path) {
     int i = strlen(path) - 1;
@@ -368,56 +311,6 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     return 0;
 }
 
-// int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
-//                off_t offset, struct fuse_file_info *fi) {
-//     /* your code here */
-//     char *trancated_path;
-//     int father_inum = 0;
-//     // if succeeded in trancating path
-//     if (truncate_path(path, &trancated_path)) {
-//         father_inum = translate(trancated_path);
-//     }
-//     char *_path = strdup(path);
-//     int inum = translate(_path);
-//     free(_path);
-//     if (inum == -ENOTDIR || inum == -ENOENT || inum == -EOPNOTSUPP) {
-//         return inum;
-//     }
-
-//     if (father_inum != 0 && !inode_is_dir(father_inum, inum)) {
-//         return -ENOTDIR;
-//     }
-
-//     struct fs_inode *inode;
-//     struct fs_dirent *dir;
-//     inode = &inode_region[inum];
-//     // check is dir
-//     if (!S_ISDIR(inode->mode)) {
-//         return -ENOTDIR;
-//     }
-
-//     dir = malloc(FS_BLOCK_SIZE);
-//     int block_pos = inode->ptrs[0];
-//     block_read(dir, block_pos, 1);
-//     int curr_inum;
-//     struct fs_inode curr_inode;
-
-//     struct stat sb;
-
-//     int i;
-//     for (i = 0; i < 32; i++) {
-//         if (dir[i].valid == 0) {
-//             continue;
-//         }
-
-//         curr_inum = dir[i].inode;
-//         curr_inode = inode_region[curr_inum];
-//         set_attr(curr_inode, &sb);
-//         filler(ptr, dir[i].name, &sb, 0);
-//     }
-//     free(dir);
-//     return 0;
-// }
 
 /* create - create a new file with specified permissions
  *
