@@ -224,8 +224,11 @@ void readdir_test_helper(direntry_t *table, char *path) {
         printf(" %s", table[i].name);
     }
     printf("\nActual entries: ");
-    fs_ops.readdir(path, table, test_filler, 0, NULL);
-
+    // int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
+    //                off_t offset, struct fuse_file_info *fi)
+    int status = fs_ops.readdir(path, table, test_filler, 0, NULL);
+    printf("status is %d", status);
+    ck_assert_int_eq(status, 0);
     for (i = 0; table[i].name != NULL; i++) {
         if (!table[i].seen) {
             printf("entry: %s isn't seen in readdir: %s\n ", table[i].name,
@@ -235,14 +238,6 @@ void readdir_test_helper(direntry_t *table, char *path) {
     }
 }
 
-/*  * success - return 0
- * errors - path resolution, ENOTDIR, ENOENT
- *
- * hint - check the testing instructions if you don't understand how
- *        to call the filler function
- */
-// int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
-//                off_t offset, struct fuse_file_info *fi)
 START_TEST(readdir_test) {
     char *paths[] = {"/", "/dir2", "/dir3", "/dir3/subdir",
                      "/dir-with-long-name"};
@@ -251,6 +246,19 @@ START_TEST(readdir_test) {
     for (int i = 0; i < 5; i++) {
         printf("\nreaddir path: %s\n", paths[i]);
         readdir_test_helper(tables[i], paths[i]);
+    }
+}
+END_TEST
+
+START_TEST(readdir_error_test) {
+    char *paths[] = {"/dir2/file.4k+", "/dir2/notexist"};
+    int expected_error[] = {ENOTDIR, ENOENT};
+    for (int i = 0; i < 2; i++) {
+        printf("readdir path: %s \n", paths[i]);
+        int status = fs_ops.readdir(paths[i], dir2_table, test_filler, 0, NULL);
+        printf("Expected error: %d \t", expected_error[i]);
+        printf("Actual error: %d\n", -status);
+        ck_assert_int_eq(-status, expected_error[i]);
     }
 }
 END_TEST
@@ -266,6 +274,7 @@ int main(int argc, char **argv) {
     TCase *tc_getattr_error = tcase_create("get_attr translation error test");
 
     TCase *tc_readir = tcase_create("readdir test");
+    TCase *tc_readdir_error = tcase_create("readdir error test");
 
     TCase *tc_single_read = tcase_create("single read test");
 
@@ -276,16 +285,18 @@ int main(int argc, char **argv) {
     tcase_add_test(tc_getattr_error, getattr_error_test);
     tcase_add_test(tc_single_read, single_read_test);
     tcase_add_test(tc_readir, readdir_test);
+    tcase_add_test(tc_readdir_error, readdir_error_test);
 
     // suite_add_tcase(s, tc);
     /* TODO: Uncomment below testcases one by one.*/
 
-    // suite_add_tcase(s, tc_sample_getattr);
-    // suite_add_tcase(s, tc_getattr);
-    // suite_add_tcase(s, tc_getattr_error);
+    suite_add_tcase(s, tc_sample_getattr);
+    suite_add_tcase(s, tc_getattr);
+    suite_add_tcase(s, tc_getattr_error);
 
     suite_add_tcase(s, tc_readir);
-
+    
+    suite_add_tcase(s, tc_readdir_error);
     // suite_add_tcase(s, tc_single_read);
 
     SRunner *sr = srunner_create(s);
