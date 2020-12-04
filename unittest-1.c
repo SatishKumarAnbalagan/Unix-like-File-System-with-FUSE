@@ -105,6 +105,7 @@ START_TEST(getattr_sample_test) {
         sb->st_uid, sb->st_gid, sb->st_mode, sb->st_size, sb->st_ctim.tv_sec,
         sb->st_mtim.tv_sec);
     ck_assert_int_eq(sb->st_gid, 0);
+    free(sb);
 }
 END_TEST
 
@@ -139,7 +140,29 @@ START_TEST(getattr_test) {
         // Compatibility, use tv_sec for integer comparison.
         ck_assert_int_eq(attr_table[i].ctime, sb->st_ctim.tv_sec);
         ck_assert_int_eq(attr_table[i].mtime, sb->st_mtim.tv_sec);
+        free(sb);
     }
+}
+END_TEST
+
+START_TEST(getattr_error_test) {
+    int count = 4;
+    char *paths[] = {
+        "/not-a-file",
+        "/file.1k/file.0",
+        "/not-a-dir/file.0",
+        "/dir2/not-a-file"
+    };
+    int expected_error[] = {ENOENT, ENOTDIR, ENOENT, ENOENT};
+    for (int i = 0; i < count; i++) {
+        printf("path is %s, expect error is %d \n", paths[i], expected_error[i]);
+        struct stat *sb = malloc(sizeof(*sb));
+        int error = fs_ops.getattr(paths[i], sb);
+        printf("Actual error: %d \n", error);
+        ck_assert_int_eq(expected_error[i], -error);
+        free(sb);
+    }
+
 }
 END_TEST
 
@@ -174,6 +197,7 @@ int main(int argc, char **argv) {
     TCase *tc = tcase_create("read_mostly");
     TCase *tc_sample_getattr = tcase_create("get_attr sample test");
     TCase *tc_getattr = tcase_create("get_attr test");
+    TCase *tc_getattr_error = tcase_create("get_attr translation error test");
 
     TCase *tc_single_read = tcase_create("single read test");
 
@@ -181,7 +205,7 @@ int main(int argc, char **argv) {
     /* add more tests here */
     tcase_add_test(tc_sample_getattr, getattr_sample_test);
     tcase_add_test(tc_getattr, getattr_test);
-
+    tcase_add_test(tc_getattr_error, getattr_error_test);
     tcase_add_test(tc_single_read, single_read_test);
 
     suite_add_tcase(s, tc);
@@ -189,6 +213,7 @@ int main(int argc, char **argv) {
 
     suite_add_tcase(s, tc_sample_getattr);
     suite_add_tcase(s, tc_getattr);
+    suite_add_tcase(s, tc_getattr_error);
 
     // suite_add_tcase(s, tc_single_read);
 
