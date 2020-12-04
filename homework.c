@@ -557,7 +557,9 @@ int fs_read(const char *path, char *buf, size_t len, off_t offset,
 
     int end = (offset + len >= file_len ? file_len : offset + len)  - 1;
     int curr_ptr = offset;
+    int buf_ptr = 0;
     for (int i = 0; curr_ptr <= end; i++) {
+        
         // offset is smaller than current block ends, start reading.
         if (((i+1) * FS_BLOCK_SIZE) > offset) {
             int lba = _in.ptrs[i];
@@ -570,7 +572,9 @@ int fs_read(const char *path, char *buf, size_t len, off_t offset,
             int blck_ptr = blck_read_start;
             // copy until end of read or end of block.
             while (curr_ptr <= end && blck_ptr < FS_BLOCK_SIZE) {
-                buf[curr_ptr++] = tmp[blck_ptr++];
+                // printf("in fs_read: curr blck #: %d, char: %c\n buffer: %s\n", i, tmp[blck_ptr], buf);  
+                buf[buf_ptr++] = tmp[blck_ptr++];
+                curr_ptr++;
             }
             if (curr_ptr > end) break;
         }
