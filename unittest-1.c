@@ -327,7 +327,8 @@ START_TEST(fsstat_test) {
     expected.f_namemax = 27;
     printf("File system stats test\n ");
     printf(
-        "Expected: bsize: %ld, blocks: %ld, free blocks: %ld\n available blocks: "
+        "Expected: bsize: %ld, blocks: %ld, free blocks: %ld\n available "
+        "blocks: "
         "%ld, max name length: %ld\n",
         expected.f_bsize, expected.f_blocks, expected.f_bfree,
         expected.f_bavail, expected.f_namemax);
@@ -346,6 +347,76 @@ START_TEST(fsstat_test) {
     ck_assert_int_eq(expected.f_bavail, actual->f_bavail);
     ck_assert_int_eq(expected.f_namemax, actual->f_namemax);
     free(actual);
+}
+END_TEST
+
+START_TEST(fschmod_file_test) {
+    // {"/file.1k", 500, 500, 0100666, 1000, 1565283152, 1565283152}
+    int i = 1;
+    attr_t file = attr_table[i];
+    mode_t new_perm = 0100222;
+    printf("\nPath is %s\n Previous: permission: %o isfile:%d \n",
+           attr_table[i].path, attr_table[i].mode, S_ISREG(file.mode));
+    printf("chmod file permission to : %o\n", new_perm);
+
+    fs_ops.chmod(file.path, new_perm);
+    struct stat st;
+    fs_ops.getattr(file.path, &st);
+    printf("new attrs: permission: %o \t isfile: %d\n", st.st_mode,
+           S_ISREG(st.st_mode));
+
+    ck_assert_int_eq(new_perm, st.st_mode);
+    ck_assert_int_eq(S_ISREG(file.mode), S_ISREG(st.st_mode));
+
+    // give bad permission test
+    new_perm = 0040333;
+    mode_t expect_perm = 0100333;
+    printf("\nPath is %s\n Previous: permission: %o isfile:%d \n",
+           attr_table[i].path, attr_table[i].mode, S_ISREG(file.mode));
+    printf("chmod file permission to : %o\n", new_perm);
+
+    fs_ops.chmod(file.path, new_perm);
+    fs_ops.getattr(file.path, &st);
+    printf("new attrs: permission: %o \t isfile: %d\n", st.st_mode,
+           S_ISREG(st.st_mode));
+
+    ck_assert_int_eq(expect_perm, st.st_mode);
+    ck_assert_int_eq(S_ISREG(file.mode), S_ISREG(st.st_mode));
+}
+END_TEST
+
+START_TEST(fschmod_dir_test) {
+//    {"/dir-with-long-name", 0, 0, 040777, 4096, 1565283152, 1565283167},
+    int i = 3;
+    attr_t file = attr_table[i];
+    mode_t new_perm = 040222;
+    printf("\nPath is %s\n Previous: permission: %o isfile:%d \n",
+           attr_table[i].path, attr_table[i].mode, S_ISREG(file.mode));
+    printf("chmod file permission to : %o\n", new_perm);
+
+    fs_ops.chmod(file.path, new_perm);
+    struct stat st;
+    fs_ops.getattr(file.path, &st);
+    printf("new attrs: permission: %o \t isfile: %d\n", st.st_mode,
+           S_ISREG(st.st_mode));
+
+    ck_assert_int_eq(new_perm, st.st_mode);
+    ck_assert_int_eq(S_ISREG(file.mode), S_ISREG(st.st_mode));
+
+    // give bad permission test
+    new_perm = 0100333;
+    mode_t expect_perm = 040333;
+    printf("\nPath is %s\n Previous: permission: %o isfile:%d \n",
+           attr_table[i].path, attr_table[i].mode, S_ISREG(file.mode));
+    printf("chmod file permission to : %o\n", new_perm);
+
+    fs_ops.chmod(file.path, new_perm);
+    fs_ops.getattr(file.path, &st);
+    printf("new attrs: permission: %o \t isfile: %d\n", st.st_mode,
+           S_ISREG(st.st_mode));
+
+    ck_assert_int_eq(expect_perm, st.st_mode);
+    ck_assert_int_eq(S_ISREG(file.mode), S_ISREG(st.st_mode));
 }
 END_TEST
 
@@ -368,7 +439,10 @@ int main(int argc, char **argv) {
     TCase *tc_single_read = tcase_create("single read test");
     TCase *tc_chunk_read = tcase_create("chuck read test");
 
-    TCase * tc_fsstat = tcase_create("fs stat test");
+    TCase *tc_fsstat = tcase_create("fs stat test");
+
+    TCase *tc_chmod_file_test = tcase_create("fs chmod file test");
+    TCase *tc_chmod_dir_test = tcase_create("fs chmod dir test");
 
     tcase_add_test(tc, a_test); /* see START_TEST above */
     /* add more tests here */
@@ -380,21 +454,26 @@ int main(int argc, char **argv) {
     tcase_add_test(tc_readdir_error, readdir_error_test);
     tcase_add_test(tc_chunk_read, fsread_small_read_test);
     tcase_add_test(tc_fsstat, fsstat_test);
+    tcase_add_test(tc_chmod_file_test, fschmod_file_test);
+    tcase_add_test(tc_chmod_dir_test, fschmod_dir_test);
 
     // suite_add_tcase(s, tc);
     /* TODO: Uncomment below testcases one by one.*/
 
-    suite_add_tcase(s, tc_sample_getattr);
-    suite_add_tcase(s, tc_getattr);
-    suite_add_tcase(s, tc_getattr_error);
+    // suite_add_tcase(s, tc_sample_getattr);
+    // suite_add_tcase(s, tc_getattr);
+    // suite_add_tcase(s, tc_getattr_error);
 
-    suite_add_tcase(s, tc_readir);
+    // suite_add_tcase(s, tc_readir);
 
-    suite_add_tcase(s, tc_readdir_error);
-    suite_add_tcase(s, tc_single_read);
-    suite_add_tcase(s, tc_chunk_read);
+    // suite_add_tcase(s, tc_readdir_error);
+    // suite_add_tcase(s, tc_single_read);
+    // suite_add_tcase(s, tc_chunk_read);
 
-    suite_add_tcase(s, tc_fsstat);
+    // suite_add_tcase(s, tc_fsstat);
+
+    suite_add_tcase(s, tc_chmod_file_test);
+    suite_add_tcase(s, tc_chmod_dir_test);
 
     SRunner *sr = srunner_create(s);
     /* Note:  No fork mode cause
