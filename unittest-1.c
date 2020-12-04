@@ -295,32 +295,66 @@ START_TEST(fsread_small_read_test) {
 }
 END_TEST
 
-START_TEST(fsread_chunck_sample_test) {
-    int i = 0;
-    printf(
-        "\nPath is %s\t small chunk reads \n Expected: checksum "
-        "is %u\n",
-        cksum_table[i].path, cksum_table[i].cksum);
+// START_TEST(fsread_chunck_sample_test) {
+//     int i = 0;
+//     printf(
+//         "\nPath is %s\t small chunk reads \n Expected: checksum "
+//         "is %u\n",
+//         cksum_table[i].path, cksum_table[i].cksum);
 
-    int file_len = cksum_table[i].len;
-    char *buf = malloc(sizeof(char) * cksum_table[i].len);
-    int step = 17;
-    for (int offset = 0; offset < file_len; offset += step) {
-        printf("read param: step: %d, offset: %d \n", step, offset);
-        fs_ops.read(cksum_table[i].path, buf + offset, step, offset, NULL);
-    }
-    // TODO: crc32 buf type mismatch
-    // Cast to unsigned char avoid warning
-    unsigned cksum = crc32(0, (unsigned char *)buf, cksum_table[i].len);
-    printf(" Actual: checksum is %u for chuck size: %d\n", cksum, step);
-    printf(" Read result: %s\n", buf);
-    ck_assert_int_eq(cksum_table[i].cksum, cksum);
+//     int file_len = cksum_table[i].len;
+//     char *buf = malloc(sizeof(char) * cksum_table[i].len);
+//     int step = 17;
+//     for (int offset = 0; offset < file_len; offset += step) {
+//         printf("read param: step: %d, offset: %d \n", step, offset);
+//         fs_ops.read(cksum_table[i].path, buf + offset, step, offset, NULL);
+//     }
+//     // TODO: crc32 buf type mismatch
+//     // Cast to unsigned char avoid warning
+//     unsigned cksum = crc32(0, (unsigned char *)buf, cksum_table[i].len);
+//     printf(" Actual: checksum is %u for chuck size: %d\n", cksum, step);
+//     printf(" Read result: %s\n", buf);
+//     ck_assert_int_eq(cksum_table[i].cksum, cksum);
+// }
+// END_TEST
+
+START_TEST(fsstat_test) {
+    struct statvfs expected;
+    expected.f_bsize = 4096;
+    expected.f_blocks = 398;
+    expected.f_bfree = 355;
+    expected.f_bavail = 355;
+    expected.f_namemax = 27;
+    printf("File system stats test\n ");
+    printf(
+        "Expected: bsize: %ld, blocks: %ld, free blocks: %ld\n available blocks: "
+        "%ld, max name length: %ld\n",
+        expected.f_bsize, expected.f_blocks, expected.f_bfree,
+        expected.f_bavail, expected.f_namemax);
+
+    struct statvfs *actual = malloc(sizeof(*actual));
+
+    fs_ops.statfs("/", actual);
+    printf(
+        "Actual: bsize: %ld, blocks: %ld, free blocks: %ld\n available blocks: "
+        "%ld, max name length: %ld\n",
+        actual->f_bsize, actual->f_blocks, actual->f_bfree, actual->f_bavail,
+        actual->f_namemax);
+    ck_assert_int_eq(expected.f_bsize, actual->f_bsize);
+    ck_assert_int_eq(expected.f_blocks, actual->f_blocks);
+    ck_assert_int_eq(expected.f_bfree, actual->f_bfree);
+    ck_assert_int_eq(expected.f_bavail, actual->f_bavail);
+    ck_assert_int_eq(expected.f_namemax, actual->f_namemax);
+    free(actual);
 }
 END_TEST
 
 int main(int argc, char **argv) {
     block_init("test.img");
     fs_ops.init(NULL);
+
+    // Regenerate the test image each time of tests.
+    system("python gen-disk.py -q disk1.in test.img");
 
     Suite *s = suite_create("fs5600");
     TCase *tc = tcase_create("read_mostly");
@@ -334,6 +368,8 @@ int main(int argc, char **argv) {
     TCase *tc_single_read = tcase_create("single read test");
     TCase *tc_chunk_read = tcase_create("chuck read test");
 
+    TCase * tc_fsstat = tcase_create("fs stat test");
+
     tcase_add_test(tc, a_test); /* see START_TEST above */
     /* add more tests here */
     tcase_add_test(tc_sample_getattr, getattr_sample_test);
@@ -343,6 +379,7 @@ int main(int argc, char **argv) {
     tcase_add_test(tc_readir, readdir_test);
     tcase_add_test(tc_readdir_error, readdir_error_test);
     tcase_add_test(tc_chunk_read, fsread_small_read_test);
+    tcase_add_test(tc_fsstat, fsstat_test);
 
     // suite_add_tcase(s, tc);
     /* TODO: Uncomment below testcases one by one.*/
@@ -357,7 +394,14 @@ int main(int argc, char **argv) {
     suite_add_tcase(s, tc_single_read);
     suite_add_tcase(s, tc_chunk_read);
 
+    suite_add_tcase(s, tc_fsstat);
+
     SRunner *sr = srunner_create(s);
+    /* Note:  No fork mode cause
+    suite_add_tcase(s, tc_single_read); or suite_add_tcase(s, tc_chunk_read); to
+    conflict with suite_add_tcase(s, tc_readir); gives weird segfault error.
+    */
+
     // srunner_set_fork_status(sr, CK_NOFORK);
 
     srunner_run_all(sr, CK_VERBOSE);
