@@ -82,7 +82,6 @@ void *fs_init(struct fuse_conn_info *conn) {
     /* your code here */
     /* here 1 stands for block size, here is 4096 bytes */
     block_read(&superblock, 0, 1);
-    int super_blck_num = superblock.disk_size;
 
     /* read bitmaps */
     block_read(&bitmap, 1, 1);
@@ -311,7 +310,6 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     return 0;
 }
 
-
 /* create - create a new file with specified permissions
  *
  * success - return 0
@@ -448,31 +446,33 @@ int fs_read(const char *path, char *buf, size_t len, off_t offset,
     int file_len = _in.size;
     if (offset >= file_len) return byte_read;
 
-    int end = (offset + len >= file_len ? file_len : offset + len)  - 1;
+    int end = (offset + len >= file_len ? file_len : offset + len) - 1;
     int curr_ptr = offset;
     int buf_ptr = 0;
     for (int i = 0; curr_ptr <= end; i++) {
-        
         // offset is smaller than current block ends, start reading.
-        if (((i+1) * FS_BLOCK_SIZE) > offset) {
+        if (((i + 1) * FS_BLOCK_SIZE) > offset) {
             int lba = _in.ptrs[i];
             char tmp[FS_BLOCK_SIZE];
             block_read(tmp, lba, 1);
 
             int blck_read_start = 0;
-            // offset is larger than current block start, shift blck start to offset position.
-            if (offset > i * FS_BLOCK_SIZE) blck_read_start = offset- i * FS_BLOCK_SIZE;
+            // offset is larger than current block start, shift blck start to
+            // offset position.
+            if (offset > i * FS_BLOCK_SIZE)
+                blck_read_start = offset - i * FS_BLOCK_SIZE;
             int blck_ptr = blck_read_start;
             // copy until end of read or end of block.
             while (curr_ptr <= end && blck_ptr < FS_BLOCK_SIZE) {
-                // printf("in fs_read: curr blck #: %d, char: %c\n buffer: %s\n", i, tmp[blck_ptr], buf);  
+                // printf("in fs_read: curr blck #: %d, char: %c\n buffer:
+                // %s\n", i, tmp[blck_ptr], buf);
                 buf[buf_ptr++] = tmp[blck_ptr++];
                 curr_ptr++;
             }
             if (curr_ptr > end) break;
         }
     }
-    byte_read = curr_ptr - offset +1;
+    byte_read = curr_ptr - offset + 1;
     return byte_read;
 }
 
@@ -507,21 +507,20 @@ int fs_statfs(const char *path, struct statvfs *st) {
      */
     /* your code here */
     st->f_bsize = FS_BLOCK_SIZE;
-    int block_map = sizeof(superblock.pad);
-    st->f_blocks = superblock.disk_size - (1 + block_map);
-
-    int i = 0, num_free_blocks = 0;
-
-    for (i = 0; i < superblock.disk_size; i++) {
-        num_free_blocks++;
+    st->f_blocks = superblock.disk_size - 2;
+    int free_num = 0;
+    for (int i = 0; i < superblock.disk_size; i++) {
+        // TODO bit_test true if occupied?
+        if (!bit_test(bitmap, i)) {
+            free_num++;
+        }
     }
-
-    st->f_bfree = num_free_blocks;
-    st->f_bavail = num_free_blocks;
-    st->f_namemax = FILENAME_MAXLENGTH;
-
-    return -EOPNOTSUPP;
+    st->f_bfree = free_num;
+    st->f_bavail = free_num;
+    st->f_namemax = MAX_NAME_LEN;
+    return 0;
 }
+
 
 /* operations vector. Please don't rename it, or else you'll break things
  */
