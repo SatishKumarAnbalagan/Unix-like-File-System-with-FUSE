@@ -143,7 +143,6 @@ static int translate(char *path) {
     int pathc = parse_path(path, pathv);
     int inum = 2;  // root inode
     for (int i = 0; i < pathc; i++) {
-        printf("token: %s \t", pathv[i]);
         struct fs_inode _in;
         block_read(&_in, inum, 1);
         if (!S_ISDIR(_in.mode)) {
@@ -334,9 +333,17 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     char *_path = strdup(path);
     int inum = translate(_path);
     free(_path);
-    if (inum == -ENOTDIR || inum == -ENOENT || inum == -EOPNOTSUPP) {
+    if (inum == -ENOTDIR || inum == -ENOENT ) {
         return inum;
+    } else {
+        // if result path inode isn't directory return error.
+        struct fs_inode _in;
+        block_read(&_in, inum, 1);
+        if (!S_ISDIR(_in.mode)) {
+            return -ENOTDIR;
+        }
     }
+
     struct fs_inode _in;
     block_read(&_in, inum, 1);
     int blknum = _in.ptrs[0];  // ptrs are a list of block numbers
