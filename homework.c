@@ -67,6 +67,14 @@ int bit_test(unsigned char *map, int i) { return map[i / 8] & (1 << (i % 8)); }
  * recommended actions:
  *   - read superblock
  *   - allocate memory, read bitmaps and inodes
+ *
+ *
+ * professor comment: It’s a good place to read in the superblock to find out
+ * how many blocks there are in the disk, and to read in the block bitmap. Can’t
+ * think of anything else that makes sense to do in the init function. " Whoops
+ * - that comment is left over from an earlier version of the file system that
+ * had a separate inode region. In that version it was helpful to keep the
+ * inodes in memory."
  */
 void *fs_init(struct fuse_conn_info *conn) {
     // /* your code here */
@@ -333,19 +341,16 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     char *_path = strdup(path);
     int inum = translate(_path);
     free(_path);
-    if (inum == -ENOTDIR || inum == -ENOENT ) {
+    if (inum == -ENOTDIR || inum == -ENOENT) {
         return inum;
-    } else {
-        // if result path inode isn't directory return error.
-        struct fs_inode _in;
-        block_read(&_in, inum, 1);
-        if (!S_ISDIR(_in.mode)) {
-            return -ENOTDIR;
-        }
     }
-
+    // if result path inode isn't directory return error.
     struct fs_inode _in;
     block_read(&_in, inum, 1);
+    if (!S_ISDIR(_in.mode)) {
+        return -ENOTDIR;
+    }
+
     int blknum = _in.ptrs[0];  // ptrs are a list of block numbers
 
     struct fs_dirent des[MAX_DIREN_NUM];
@@ -538,7 +543,6 @@ int fs_truncate(const char *path, off_t len) {
 int fs_read(const char *path, char *buf, size_t len, off_t offset,
             struct fuse_file_info *fi) {
     /* your code here */
-    return -EOPNOTSUPP;
 }
 
 /* write - write data to a file
