@@ -543,6 +543,40 @@ int fs_truncate(const char *path, off_t len) {
 int fs_read(const char *path, char *buf, size_t len, off_t offset,
             struct fuse_file_info *fi) {
     /* your code here */
+    int byte_read = 0;
+    char *_path = strdup(path);
+    int inum = translate(_path);
+    if (inum == ENOENT || inum == ENOTDIR) return inum;
+    struct fs_inode _in;
+    block_read(&_in, inum, 1);
+    // inode isn't a file return EISDIR
+    if (!S_ISREG(_in.mode)) return EISDIR;
+
+    int file_len = _in.size;
+    if (offset >= file_len) return byte_read;
+
+    int end = (offset + len >= file_len ? file_len : offset + len)  - 1;
+    int curr_ptr = offset;
+    for (int i = 0; curr_ptr <= end; i++) {
+        // offset is smaller than current block ends, start reading.
+        if (((i+1) * FS_BLOCK_SIZE) > offset) {
+            int lba = _in.ptrs[i];
+            char tmp[FS_BLOCK_SIZE];
+            block_read(tmp, lba, 1);
+
+            int blck_read_start = 0;
+            // offset is larger than current block start, shift blck start to offset position.
+            if (offset > i * FS_BLOCK_SIZE) blck_read_start = offset- i * FS_BLOCK_SIZE;
+            int blck_ptr = blck_read_start;
+            // copy until end of read or end of block.
+            while (curr_ptr <= end && blck_ptr < FS_BLOCK_SIZE) {
+                buf[curr_ptr++] = tmp[blck_ptr++];
+            }
+            if (curr_ptr > end) break;
+        }
+    }
+    byte_read = curr_ptr - offset +1;
+    return byte_read;
 }
 
 /* write - write data to a file
