@@ -394,13 +394,16 @@ int fs_chmod(const char *path, mode_t mode) {
     if (inum < 0) {
         return inum;
     }
+    mode_t new_permission = mode & 0000777;
 
-    struct fs_inode *inode;
-    inode = &inode_region[inum];
-    inode->mode = mode;
+    struct fs_inode _in;
+    block_read(&_in, inum, 1);
+    // S_IFMT     0170000   bit mask for the file type bit field
+    //  chmod should only change last 9 bit of mode
+    mode_t file_type = _in.mode & S_IFMT;
 
-    update_inode(inum);
-
+    _in.mode = file_type | new_permission;
+    block_write(&_in, inum, 1);
     return 0;
 }
 
@@ -520,7 +523,6 @@ int fs_statfs(const char *path, struct statvfs *st) {
     st->f_namemax = MAX_NAME_LEN;
     return 0;
 }
-
 
 /* operations vector. Please don't rename it, or else you'll break things
  */
