@@ -213,11 +213,6 @@ static void set_attr(struct fs_inode inode, struct stat *sb) {
     sb->st_mtime = inode.mtime;
 }
 
-void update_inode(int inum) {
-    int offset = 1 + inode_map_sz + block_map_sz + (inum / 16);
-    // block_write(&inode_region[inum - (inum % 16)], offset, 1);
-}
-
 /* check whether this inode is a directory */
 int inode_is_dir(int father_inum, int inum) {
     struct fs_inode *inode;

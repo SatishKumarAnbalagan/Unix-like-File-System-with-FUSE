@@ -491,23 +491,23 @@ int main(int argc, char **argv) {
 
     tcase_add_test(tc_rename_file, fsrename_file_test);
 
-    // suite_add_tcase(s, tc);
+    suite_add_tcase(s, tc);
     /* TODO: Uncomment below testcases one by one.*/
 
-    // suite_add_tcase(s, tc_sample_getattr);
-    // suite_add_tcase(s, tc_getattr);
-    // suite_add_tcase(s, tc_getattr_error);
+    suite_add_tcase(s, tc_sample_getattr);
+    suite_add_tcase(s, tc_getattr);
+    suite_add_tcase(s, tc_getattr_error);
 
-    // suite_add_tcase(s, tc_readir);
+    suite_add_tcase(s, tc_readir);
 
-    // suite_add_tcase(s, tc_readdir_error);
-    // suite_add_tcase(s, tc_single_read);
-    // suite_add_tcase(s, tc_chunk_read);
+    suite_add_tcase(s, tc_readdir_error);
+    suite_add_tcase(s, tc_single_read);
+    suite_add_tcase(s, tc_chunk_read);
 
-    // suite_add_tcase(s, tc_fsstat);
+    suite_add_tcase(s, tc_fsstat);
 
-    // suite_add_tcase(s, tc_chmod_file_test);
-    // suite_add_tcase(s, tc_chmod_dir_test);
+    suite_add_tcase(s, tc_chmod_file_test);
+    suite_add_tcase(s, tc_chmod_dir_test);
     suite_add_tcase(s, tc_rename_file);
 
     SRunner *sr = srunner_create(s);
