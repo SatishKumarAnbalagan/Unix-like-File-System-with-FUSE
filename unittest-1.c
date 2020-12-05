@@ -239,6 +239,8 @@ void readdir_test_helper(direntry_t *table, char *path) {
                    path);
             ck_abort();
         }
+        // reset seen status.
+        table[i].seen = 0;
     }
 }
 
@@ -386,7 +388,7 @@ START_TEST(fschmod_file_test) {
 END_TEST
 
 START_TEST(fschmod_dir_test) {
-//    {"/dir-with-long-name", 0, 0, 040777, 4096, 1565283152, 1565283167},
+    //    {"/dir-with-long-name", 0, 0, 040777, 4096, 1565283152, 1565283167},
     int i = 3;
     attr_t file = attr_table[i];
     mode_t new_perm = 040222;
@@ -420,6 +422,34 @@ START_TEST(fschmod_dir_test) {
 }
 END_TEST
 
+START_TEST(fsrename_file_test) {
+    // {"/dir3/subdir/file.12k", 500, 500, 0100666, 12288, 1565283152,
+    // 1565283167}
+    // {3243963207, 12288, "/dir3/subdir/file.12k"},
+    int cksum_idx = 7;
+    cksum_t cksum_entry = cksum_table[cksum_idx];
+    const char *src_path = "/dir3/subdir/file.12k";
+    const char *des_path = "/dir3/subdir/renamed.12k";
+    printf("Rename file: %s to %s \n", cksum_entry.path, des_path);
+
+    int status = fs_ops.rename(src_path, des_path);
+    printf("status: %d\n", status);
+    ck_assert_int_eq(status, 0);
+
+    printf("Expected cksum: %u \n", cksum_entry.cksum);
+
+    // int fs_read(const char *path, char *buf, size_t len, off_t offset,
+    //         struct fuse_file_info *fi)
+    char *buf = malloc(sizeof(*buf) * cksum_entry.len);
+
+    fs_ops.read(des_path, buf, cksum_entry.len, 0, NULL);
+    unsigned act_cksum = crc32(0, (unsigned char *)buf, cksum_entry.len);
+
+    printf("Acutal cksum: %u\n", act_cksum);
+    ck_assert_int_eq(cksum_entry.cksum, act_cksum);
+}
+END_TEST
+
 int main(int argc, char **argv) {
     block_init("test.img");
     fs_ops.init(NULL);
@@ -444,6 +474,8 @@ int main(int argc, char **argv) {
     TCase *tc_chmod_file_test = tcase_create("fs chmod file test");
     TCase *tc_chmod_dir_test = tcase_create("fs chmod dir test");
 
+    TCase *tc_rename_file = tcase_create("fs rename file test");
+
     tcase_add_test(tc, a_test); /* see START_TEST above */
     /* add more tests here */
     tcase_add_test(tc_sample_getattr, getattr_sample_test);
@@ -456,6 +488,8 @@ int main(int argc, char **argv) {
     tcase_add_test(tc_fsstat, fsstat_test);
     tcase_add_test(tc_chmod_file_test, fschmod_file_test);
     tcase_add_test(tc_chmod_dir_test, fschmod_dir_test);
+
+    tcase_add_test(tc_rename_file, fsrename_file_test);
 
     // suite_add_tcase(s, tc);
     /* TODO: Uncomment below testcases one by one.*/
@@ -472,8 +506,9 @@ int main(int argc, char **argv) {
 
     // suite_add_tcase(s, tc_fsstat);
 
-    suite_add_tcase(s, tc_chmod_file_test);
-    suite_add_tcase(s, tc_chmod_dir_test);
+    // suite_add_tcase(s, tc_chmod_file_test);
+    // suite_add_tcase(s, tc_chmod_dir_test);
+    suite_add_tcase(s, tc_rename_file);
 
     SRunner *sr = srunner_create(s);
     /* Note:  No fork mode cause
