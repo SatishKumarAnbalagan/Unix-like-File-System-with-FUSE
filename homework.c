@@ -204,6 +204,7 @@ static void set_attr(struct fs_inode inode, struct stat *sb) {
     sb->st_uid = inode.uid;
     sb->st_gid = inode.gid;
     sb->st_size = inode.size;
+    sb->st_blksize = FS_BLOCK_SIZE;
     sb->st_blocks = (inode.size + FS_BLOCK_SIZE - 1) / FS_BLOCK_SIZE;
     sb->st_nlink = 1;
     sb->st_atime = inode.mtime;
