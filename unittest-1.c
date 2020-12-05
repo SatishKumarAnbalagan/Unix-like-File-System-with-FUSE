@@ -450,6 +450,79 @@ START_TEST(fsrename_file_test) {
 }
 END_TEST
 
+START_TEST(fsrename_dir_test) {
+    system("python gen-disk.py -q disk1.in test.img");
+
+    // {4090922556, 8190, "/dir3/subdir/file.8k-"},
+    int cksum_idx = 6;
+    cksum_t cksum_entry = cksum_table[cksum_idx];
+    const char *src_dir = "/dir3/subdir";
+    const char *des_dir = "/dir3/renameddir";
+    printf("Rename dirctory: %s to %s \n", src_dir, des_dir);
+
+    int status = fs_ops.rename(src_dir, des_dir);
+    printf("status: %d\n", status);
+    ck_assert_int_eq(status, 0);
+
+    char *expected_path = "/dir3/renameddir/file.8k-";
+    printf("Expected, filename: %s cksum: %u \n", expected_path,
+           cksum_entry.cksum);
+
+    // int fs_read(const char *path, char *buf, size_t len, off_t offset,
+    //         struct fuse_file_info *fi)
+    char *buf = malloc(sizeof(*buf) * cksum_entry.len);
+
+    fs_ops.read(expected_path, buf, cksum_entry.len, 0, NULL);
+    unsigned act_cksum = crc32(0, (unsigned char *)buf, cksum_entry.len);
+
+    printf("Acutal cksum: %u\n", act_cksum);
+    ck_assert_int_eq(cksum_entry.cksum, act_cksum);
+}
+END_TEST
+
+/* Possible errors
+ * ENOENT - source does not exist
+ * EEXIST - destination already exists
+ * EINVAL - source and destination are not in the same directory
+ */
+START_TEST(fsrename_error_test) {
+    system("python gen-disk.py -q disk1.in test.img");
+
+    // ENOENT - source does not exist
+    const char *src_dir = "/dir3/notexist";
+    const char *des_dir = "/dir3/renameddir";
+    int status;
+    int expected[] = {-ENOENT, -EEXIST, -EINVAL};
+    printf("Rename dirctory: %s to %s \n", src_dir, des_dir);
+
+    status = fs_ops.rename(src_dir, des_dir);
+    printf("expected status: %d, actual status: %d\n", expected[0], status);
+    ck_assert_int_eq(expected[0], status);
+
+    // EEXIST - destination already exists
+    // {"/dir3/subdir/file.4k-", 500, 500, 0100666, 4095, 1565283152,
+    // 1565283167},
+    // {"/dir3/subdir/file.8k-", 500, 500, 0100666, 8190, 1565283152,
+    // 1565283167},
+    src_dir = "/dir3/subdir/file.4k-";
+    des_dir = "/dir3/subdir/file.8k-";
+    printf("Rename dirctory: %s to %s \n", src_dir, des_dir);
+    status = fs_ops.rename(src_dir, des_dir);
+
+    printf("expected status: %d, actual status: %d\n", expected[1], status);
+    ck_assert_int_eq(expected[1], status);
+
+    // EINVAL - source and destination are not in the same directory
+    src_dir = "/dir3/subdir/file.12k";
+    des_dir = "/dir3/renamed.12k";
+    printf("Rename dirctory: %s to %s \n", src_dir, des_dir);
+    status = fs_ops.rename(src_dir, des_dir);
+
+    printf("expected status: %d, actual status: %d\n", expected[2], status);
+    ck_assert_int_eq(expected[2], status);
+}
+END_TEST
+
 int main(int argc, char **argv) {
     block_init("test.img");
     fs_ops.init(NULL);
@@ -475,6 +548,8 @@ int main(int argc, char **argv) {
     TCase *tc_chmod_dir_test = tcase_create("fs chmod dir test");
 
     TCase *tc_rename_file = tcase_create("fs rename file test");
+    TCase *tc_rename_dir = tcase_create("fs rename directory test");
+    TCase *tc_rename_error = tcase_create("fs rename error test");
 
     tcase_add_test(tc, a_test); /* see START_TEST above */
     /* add more tests here */
@@ -490,25 +565,29 @@ int main(int argc, char **argv) {
     tcase_add_test(tc_chmod_dir_test, fschmod_dir_test);
 
     tcase_add_test(tc_rename_file, fsrename_file_test);
+    tcase_add_test(tc_rename_dir, fsrename_dir_test);
+    tcase_add_test(tc_rename_error, fsrename_error_test);
 
     // suite_add_tcase(s, tc);
     /* TODO: Uncomment below testcases one by one.*/
 
-    // suite_add_tcase(s, tc_sample_getattr);
-    // suite_add_tcase(s, tc_getattr);
-    // suite_add_tcase(s, tc_getattr_error);
+    suite_add_tcase(s, tc_sample_getattr);
+    suite_add_tcase(s, tc_getattr);
+    suite_add_tcase(s, tc_getattr_error);
 
-    // suite_add_tcase(s, tc_readir);
+    suite_add_tcase(s, tc_readir);
 
-    // suite_add_tcase(s, tc_readdir_error);
-    // suite_add_tcase(s, tc_single_read);
-    // suite_add_tcase(s, tc_chunk_read);
+    suite_add_tcase(s, tc_readdir_error);
+    suite_add_tcase(s, tc_single_read);
+    suite_add_tcase(s, tc_chunk_read);
 
-    // suite_add_tcase(s, tc_fsstat);
+    suite_add_tcase(s, tc_fsstat);
 
-    // suite_add_tcase(s, tc_chmod_file_test);
-    // suite_add_tcase(s, tc_chmod_dir_test);
+    suite_add_tcase(s, tc_chmod_file_test);
+    suite_add_tcase(s, tc_chmod_dir_test);
     suite_add_tcase(s, tc_rename_file);
+    suite_add_tcase(s, tc_rename_dir);
+    suite_add_tcase(s, tc_rename_error);
 
     SRunner *sr = srunner_create(s);
     /* Note:  No fork mode cause
