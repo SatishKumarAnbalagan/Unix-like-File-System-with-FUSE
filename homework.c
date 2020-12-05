@@ -534,7 +534,7 @@ int fs_read(const char *path, char *buf, size_t len, off_t offset,
             if (curr_ptr > end) break;
         }
     }
-    byte_read = curr_ptr - offset + 1;
+    byte_read = curr_ptr - offset;
     return byte_read;
 }
 
