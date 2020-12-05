@@ -23,6 +23,7 @@ typedef struct {
     int32_t size;
     uint32_t ctime;
     uint32_t mtime;
+    uint16_t blck_num;
 } attr_t;
 
 typedef struct {
@@ -35,23 +36,26 @@ typedef struct {
 
 // Expected data for attributes
 attr_t attr_table[] = {
-    {"/", 0, 0, 040777, 4096, 1565283152, 1565283167},
-    {"/file.1k", 500, 500, 0100666, 1000, 1565283152, 1565283152},
-    {"/file.10", 500, 500, 0100666, 10, 1565283152, 1565283167},
-    {"/dir-with-long-name", 0, 0, 040777, 4096, 1565283152, 1565283167},
+    {"/", 0, 0, 040777, 4096, 1565283152, 1565283167, 1},
+    {"/file.1k", 500, 500, 0100666, 1000, 1565283152, 1565283152, 1},
+    {"/file.10", 500, 500, 0100666, 10, 1565283152, 1565283167, 1},
+    {"/dir-with-long-name", 0, 0, 040777, 4096, 1565283152, 1565283167, 1},
     {"/dir-with-long-name/file.12k+", 0, 500, 0100666, 12289, 1565283152,
-     1565283167},
-    {"/dir2", 500, 500, 040777, 8192, 1565283152, 1565283167},
+     1565283167, 4},
+    {"/dir2", 500, 500, 040777, 8192, 1565283152, 1565283167, 2},
     {"/dir2/twenty-seven-byte-file-name", 500, 500, 0100666, 1000, 1565283152,
-     1565283167},
-    {"/dir2/file.4k+", 500, 500, 0100777, 4098, 1565283152, 1565283167},
-    {"/dir3", 0, 500, 040777, 4096, 1565283152, 1565283167},
-    {"/dir3/subdir", 0, 500, 040777, 4096, 1565283152, 1565283167},
-    {"/dir3/subdir/file.4k-", 500, 500, 0100666, 4095, 1565283152, 1565283167},
-    {"/dir3/subdir/file.8k-", 500, 500, 0100666, 8190, 1565283152, 1565283167},
-    {"/dir3/subdir/file.12k", 500, 500, 0100666, 12288, 1565283152, 1565283167},
-    {"/dir3/file.12k-", 0, 500, 0100777, 12287, 1565283152, 1565283167},
-    {"/file.8k+", 500, 500, 0100666, 8195, 1565283152, 1565283167},
+     1565283167, 1},
+    {"/dir2/file.4k+", 500, 500, 0100777, 4098, 1565283152, 1565283167, 2},
+    {"/dir3", 0, 500, 040777, 4096, 1565283152, 1565283167, 1},
+    {"/dir3/subdir", 0, 500, 040777, 4096, 1565283152, 1565283167, 1},
+    {"/dir3/subdir/file.4k-", 500, 500, 0100666, 4095, 1565283152, 1565283167,
+     1},
+    {"/dir3/subdir/file.8k-", 500, 500, 0100666, 8190, 1565283152, 1565283167,
+     2},
+    {"/dir3/subdir/file.12k", 500, 500, 0100666, 12288, 1565283152, 1565283167,
+     3},
+    {"/dir3/file.12k-", 0, 500, 0100777, 12287, 1565283152, 1565283167, 3},
+    {"/file.8k+", 500, 500, 0100666, 8195, 1565283152, 1565283167, 3},
     {NULL}};
 
 // Expected data for check sum
@@ -134,23 +138,25 @@ START_TEST(getattr_test) {
     for (i = 0; attr_table[i].path != NULL; i++) {
         printf(
             "Path is %s\n Expected: uid: %u \t gid: %u \t mode: %u \n size: %u "
+            "\t block_num: %d"
             "\t ctime: %u \t mtime: %u\n",
             attr_table[i].path, attr_table[i].uid, attr_table[i].gid,
-            attr_table[i].mode, attr_table[i].size, attr_table[i].ctime,
+            attr_table[i].mode, attr_table[i].size, attr_table[i].blck_num, attr_table[i].ctime,
             attr_table[i].mtime);
 
         struct stat *sb = malloc(sizeof(*sb));
         fs_ops.getattr(attr_table[i].path, sb);
         printf(
-            "Actual:uid: %u \t gid: %u \t mode: %u \n size: %lu "
-            "\t ctime: %lu \t mtime: %lu\n",
-            sb->st_uid, sb->st_gid, sb->st_mode, sb->st_size,
+            "Actual:uid: %u \t gid: %u \t mode: %u \n size: %lu \t block_num: "
+            "%lu \t ctime: %lu \t mtime: %lu\n",
+            sb->st_uid, sb->st_gid, sb->st_mode, sb->st_size, sb->st_blocks,
             sb->st_ctim.tv_sec, sb->st_mtim.tv_sec);
 
         ck_assert_int_eq(attr_table[i].uid, sb->st_uid);
         ck_assert_int_eq(attr_table[i].gid, sb->st_gid);
         ck_assert_int_eq(attr_table[i].mode, sb->st_mode);
         ck_assert_int_eq(attr_table[i].size, sb->st_size);
+        ck_assert_int_eq(attr_table[i].blck_num, sb->st_blocks);
 
         // As per stat.h doc, defined st_ctime as st_ctim.tv_sec for Backward
         // Compatibility, use tv_sec for integer comparison.
