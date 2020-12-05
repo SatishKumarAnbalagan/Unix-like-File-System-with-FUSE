@@ -141,8 +141,8 @@ START_TEST(getattr_test) {
             "\t block_num: %d"
             "\t ctime: %u \t mtime: %u\n",
             attr_table[i].path, attr_table[i].uid, attr_table[i].gid,
-            attr_table[i].mode, attr_table[i].size, attr_table[i].blck_num, attr_table[i].ctime,
-            attr_table[i].mtime);
+            attr_table[i].mode, attr_table[i].size, attr_table[i].blck_num,
+            attr_table[i].ctime, attr_table[i].mtime);
 
         struct stat *sb = malloc(sizeof(*sb));
         fs_ops.getattr(attr_table[i].path, sb);
@@ -190,14 +190,20 @@ END_TEST
             struct fuse_file_info *fi)
  */
 START_TEST(single_read_test) {
+    system("python gen-disk.py -q disk1.in test.img");
+
     int i = 0;
     for (i = 0; cksum_table[i].path != NULL; i++) {
         printf(
             "\nPath is %s\t read whole file \n Expected: checksum "
-            "is %u\n",
-            cksum_table[i].path, cksum_table[i].cksum);
+            "is %u, file len: %d\n",
+            cksum_table[i].path, cksum_table[i].cksum, cksum_table[i].len);
         char *buf = malloc(sizeof(char) * cksum_table[i].len);
-        fs_ops.read(cksum_table[i].path, buf, cksum_table[i].len, 0, NULL);
+        int byte_read =
+            fs_ops.read(cksum_table[i].path, buf, cksum_table[i].len, 0, NULL);
+        printf("Actual byte read len: %u", byte_read);
+
+        ck_assert_int_eq(cksum_table[i].len, byte_read);
         // TODO: crc32 buf type mismatch
         // Cast to unsigned char avoid warning
         // if (i == 1) {
@@ -214,7 +220,8 @@ END_TEST
 int test_filler(void *ptr, const char *name, const struct stat *st, off_t off) {
     direntry_t *table = ptr;
 
-    printf("file: %s, mode: %o\n", name, st->st_mode);
+    printf("file: %s, mode: %o, blck_num: %ld\n", name, st->st_mode,
+           st->st_blocks);
     for (int i = 0; table[i].name != NULL; i++) {
         if (strcmp(table[i].name, name) == 0) {
             table[i].seen = 1;
@@ -233,7 +240,7 @@ void readdir_test_helper(direntry_t *table, char *path) {
     for (i = 0; table[i].name != NULL; i++) {
         printf(" %s", table[i].name);
     }
-    printf("\nActual entries: ");
+    printf("\nActual entries: \n");
     // int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     //                off_t offset, struct fuse_file_info *fi)
     int status = fs_ops.readdir(path, table, test_filler, 0, NULL);
