@@ -69,14 +69,6 @@ int bit_test(unsigned char *map, int i) { return map[i / 8] & (1 << (i % 8)); }
  * recommended actions:
  *   - read superblock
  *   - allocate memory, read bitmaps and inodes
- *
- *
- * professor comment: It’s a good place to read in the superblock to find out
- * how many blocks there are in the disk, and to read in the block bitmap. Can’t
- * think of anything else that makes sense to do in the init function. " Whoops
- * - that comment is left over from an earlier version of the file system that
- * had a separate inode region. In that version it was helpful to keep the
- * inodes in memory."
  */
 void *fs_init(struct fuse_conn_info *conn) {
     /* your code here */
@@ -85,21 +77,6 @@ void *fs_init(struct fuse_conn_info *conn) {
 
     /* read bitmaps */
     block_read(&bitmap, 1, 1);
-
-    // printf("%d\n", inode_map_sz);
-
-    // block_map = malloc(sb.disk_size * FS_BLOCK_SIZE);
-    // block_read(block_map, sb.disk_size + 1, sb.disk_size * FS_BLOCK_SIZE);
-    // block_map_sz = sb.disk_size * FS_BLOCK_SIZE;
-    // // printf("%d\n", block_map_sz);
-
-    // /* read inodes */
-    // inode_region = malloc(sb.disk_size * FS_BLOCK_SIZE);
-    // int inode_region_pos = 1 + sb.disk_size + block_map_sz;
-    // block_read(inode_region, inode_region_pos, sb.disk_size);
-    // // printf("%d\n", sb.inode_region_sz);
-    // num_of_blocks = sizeof(sb.pad);
-    // // printf("%d\n", num_of_blocks);
 
     return NULL;
 }
