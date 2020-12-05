@@ -117,4 +117,19 @@ Third part - commenting, clean up & testing scripts for the source code.
 9) Satish - added progress report.
 10) Satish - code commenting & compilation
 11) Satish - initial directory check function
-12)
+- Chuhan - update path translation logic
+- Chuhan, Satish - fs stat function final implementation
+- Chuhan, Satish - fs readdir final implementation
+- Chuhan, Satish - fs get_attr final implementation
+- Chuhan - read final implementation
+- Chuhan - rename final implementation
+- Chuhan - write get_attr test, get_attr translation error test");
+- Chuhan - write readdir test, readdir error test
+- Chuhan - write single read test, chuck read test");
+- Chuhan - write fs stat test
+- Chuhan - write fs chmod file test, chmod dir test
+- Chuhan - fs rename file test, fs rename directory test, fs rename error test
+- Satish, Chuhan - unit test on Linux
+- Satish, Chuhan - fuse mount test on Linux
+
+
