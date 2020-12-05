@@ -428,7 +428,7 @@ int fs_rename(const char *src_path, const char *dst_path) {
     // destination already exists
     if (exists_in_directory(direns, dst_name) >= 0) return -EEXIST;
 
-    strncpy(direns[src_entry_idx].name, dst_name, MAX_NAME_LEN);
+    memcpy(direns[src_entry_idx].name, dst_name, MAX_NAME_LEN);
 
     block_write(direns, blknum, 1);
 
