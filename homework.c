@@ -296,14 +296,17 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     int blknum = _in.ptrs[0];  // ptrs are a list of block numbers
 
     struct fs_dirent des[MAX_DIREN_NUM];
-    struct stat sb;
+
     block_read(des, blknum, 1);
     // filler prototype
     // int test_filler(void *ptr, const char *name, const struct stat *st, off_t
     // off)
     for (int i = 0; i < MAX_DIREN_NUM; i++) {
         if (des[i].valid) {
-            set_attr(_in, &sb);
+            struct stat sb;
+            struct fs_inode dir_entry_inode;
+            block_read(&dir_entry_inode, des[i].inode, 1);
+            set_attr(dir_entry_inode, &sb);
             filler(ptr, des[i].name, &sb, 0);
         }
     }
