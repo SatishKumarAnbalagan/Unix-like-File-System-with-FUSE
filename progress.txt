@@ -1,0 +1,135 @@
+CS5600: Computer Systems
+
+Project 3 - File System Progress report
+
+Team: NULL_pointer
+    Members: 
+        1.Satish Kumar Anbalagan
+            a.Email - anbalagan.s@northeastern.edu
+            b.NUID – 001351994
+        2.Chuhan Zhang
+            a.Email - zhang.chuh@northeastern.edu
+            b.NUID - 001388346
+
+Git logs
+
+Total commits – 14 commits
+    1.Satish Kumar Anbalagan – 11 commits
+    2.Chuhan Zhang –   commits
+
+satish@ubuntu:~/cs5600/cs5600-p3-file-system-null_pointer$ git log
+commit f1d0f05909d4b399dc606ccbd1d765fbde27d267 (HEAD -> dev, origin/dev)
+Author: SatishKumarAnbalagan <anbalagan.s@husky.neu.edu>
+Date:   Sat Nov 28 19:20:04 2020 -0500
+
+    directorty check
+
+commit 8b3844eff46c08e2563d97ac899a665fd5789c74 (HEAD -> dev, origin/dev)
+Author: SatishKumarAnbalagan <anbalagan.s@husky.neu.edu>
+Date:   Sat Nov 28 18:53:33 2020 -0500
+
+    initial fs init
+
+commit 3066d96c22d009d45d101769cf6f88708f24d047
+Author: SatishKumarAnbalagan <anbalagan.s@husky.neu.edu>
+Date:   Sat Nov 28 18:24:27 2020 -0500
+
+    progress text initial
+
+commit cfa3076dab380411f335dc523a9224dd5b82c06f
+Author: SatishKumarAnbalagan <anbalagan.s@husky.neu.edu>
+Date:   Sat Nov 28 18:21:56 2020 -0500
+
+    chmod , update inode initial
+
+commit 6dbca075da6689f0571e69791ec5dab4b0217c81
+Author: SatishKumarAnbalagan <anbalagan.s@husky.neu.edu>
+Date:   Sat Nov 28 18:02:53 2020 -0500
+
+    fs read dir
+
+commit eebade4eaace40607f662cbfb03766141b7f1a4a
+Author: SatishKumarAnbalagan <anbalagan.s@husky.neu.edu>
+Date:   Sat Nov 28 16:42:15 2020 -0500
+
+    get & set attr func
+
+commit d06532b40a0cfa0ed5965a57a5b4a2801d8d56bd
+Author: SatishKumarAnbalagan <anbalagan.s@husky.neu.edu>
+Date:   Sat Nov 28 16:33:46 2020 -0500
+
+    translate & truncate initial logic
+
+commit f4d301afe8f7ac4d0a9ef3cff7078cc52773b8f1 (origin/master, origin/HEAD, master)
+Author: SatishKumarAnbalagan <anbalagan.s@husky.neu.edu>
+Date:   Sat Nov 28 15:37:08 2020 -0500
+
+    initial fs_statfs
+
+commit 58f2d42f14ee735b2480b9c8be093bb268b69e77
+Author: Maria Jump <57185717+mjump-northeastern@users.noreply.github.com>
+Date:   Wed Nov 25 12:26:25 2020 -0500
+
+    Setting up GitHub Classroom Feedback
+
+commit 1e07de701b4985e0ddfdcc986d8832488b6bd526 (origin/feedback)
+Author: Maria Jump <57185717+mjump-northeastern@users.noreply.github.com>
+Date:   Wed Nov 25 12:26:25 2020 -0500
+
+    GitHub Classroom Feedback
+
+commit 25702b9c89d5c12db272fec26365b234667a0cf7
+Author: cbdscolin <cbdscolin@gmail.com>
+Date:   Wed Nov 25 12:26:22 2020 -0500
+
+    Initial commit
+(END)
+
+Progress:
+
+We discussed about the project 3's design and implementation in three phases.
+First part - decided to implement the basic functionalities of the file system as given in Part 1.
+Second part - decided to implement the basic functionalities of the file system as given in Part 2. 
+Third part - commenting, clean up & testing scripts for the source code.
+
+## Preparation
+1. Find and read material and documentation about file systems and related methods.
+2. Discussed the timeline to complete the assignment.
+3. Understand the READ_ME of project 3 step by step.
+4. Discussed and understood basic project concept like address translation method, inode metadata.
+5. Understand method signature and purpose each method in the skeleton code.
+6. Consulted piazza for other confusions and got clarification on multiple problems.
+
+## Progress
+
+1) Satish, Chuhan - Checked & understood the requirements fully.
+2) Satish, Chuhan - Initial design of functionalities.
+3) Satish - Creation & initial commit of homework.c.
+4) Satish - initial fs_statfs function declaration & implementation.
+5) Satish - initial logic translate function declaration & implementation.
+6) Satish - initial logic truncate function declaration & implementation.
+6) Satish - initial implementation of get attributes function.
+6) Satish - initial implementation of set attributes function.
+6) Satish - initial implementation of fs_readdir function.
+6) Satish - initial fs_chmod function declaration & implementation.
+7) Satish - initial update function declaration & implementation.
+8) Satish - initial fs_init function declaration & implementation.
+9) Satish - added progress report.
+10) Satish - code commenting & compilation
+11) Satish - initial directory check function
+- Chuhan - update path translation logic
+- Chuhan, Satish - fs stat function final implementation
+- Chuhan, Satish - fs readdir final implementation
+- Chuhan, Satish - fs get_attr final implementation
+- Chuhan - read final implementation
+- Chuhan - rename final implementation
+- Chuhan - write get_attr test, get_attr translation error test");
+- Chuhan - write readdir test, readdir error test
+- Chuhan - write single read test, chuck read test");
+- Chuhan - write fs stat test
+- Chuhan - write fs chmod file test, chmod dir test
+- Chuhan - fs rename file test, fs rename directory test, fs rename error test
+- Satish, Chuhan - unit test on Linux
+- Satish, Chuhan - fuse mount test on Linux
+
+

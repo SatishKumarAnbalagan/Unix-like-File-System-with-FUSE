@@ -9,25 +9,29 @@
 #define FUSE_USE_VERSION 27
 #define _FILE_OFFSET_BITS 64
 
-#include <stdlib.h>
-#include <stddef.h>
-#include <unistd.h>
-#include <fuse.h>
-#include <fcntl.h>
-#include <string.h>
-#include <stdio.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <fuse.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "fs5600.h"
 
-/* if you don't understand why you can't use these system calls here, 
+/* if you don't understand why you can't use these system calls here,
  * you need to read the assignment description another time
  */
-#define stat(a,b) error do not use stat()
-#define open(a,b) error do not use open()
-#define read(a,b,c) error do not use read()
-#define write(a,b,c) error do not use write()
+#define stat(a, b) error do not use stat()
+#define open(a, b) error do not use open()
+#define read(a, b, c) error do not use read()
+#define write(a, b, c) error do not use write()
 #define FILENAME_MAXLENGTH 32
+
+#define MAX_PATH_LEN 10
+#define MAX_NAME_LEN 27
+#define MAX_DIREN_NUM 128
 
 /* disk access. All access is in terms of 4KB blocks; read and
  * write functions return 0 (success) or -EIO.
@@ -37,22 +41,26 @@ extern int block_write(void *buf, int lba, int nblks);
 
 /* global variables */
 struct fs_super superblock;
+unsigned char bitmap[FS_BLOCK_SIZE];
+fd_set *inode_map;
+fd_set *block_map;
+struct fs_inode *inode_region; /* inodes in memory */
+int inode_map_sz;
+int block_map_sz;
+int num_of_blocks;
 
-/* bitmap functions
- */
-void bit_set(unsigned char *map, int i)
-{
-    map[i/8] |= (1 << (i%8));
-}
-void bit_clear(unsigned char *map, int i)
-{
-    map[i/8] &= ~(1 << (i%8));
-}
-int bit_test(unsigned char *map, int i)
-{
-    return map[i/8] & (1 << (i%8));
-}
+/* function declaration */
 
+/* truncate the last token from path return 1 if succeed, 0 if not*/
+int truncate_path(const char *path, char **truncated_path);
+
+/* translate: return the inode number of given path */
+static int translate(char *path);
+
+/* bitmap functions */
+void bit_set(unsigned char *map, int i) { map[i / 8] |= (1 << (i % 8)); }
+void bit_clear(unsigned char *map, int i) { map[i / 8] &= ~(1 << (i % 8)); }
+int bit_test(unsigned char *map, int i) { return map[i / 8] & (1 << (i % 8)); }
 
 /* init - this is called once by the FUSE framework at startup. Ignore
  * the 'conn' argument.
@@ -60,10 +68,13 @@ int bit_test(unsigned char *map, int i)
  *   - read superblock
  *   - allocate memory, read bitmaps and inodes
  */
-void* fs_init(struct fuse_conn_info *conn)
-{
+void *fs_init(struct fuse_conn_info *conn) {
     /* your code here */
-    struct fs_super sb;
+    /* here 1 stands for block size, here is 4096 bytes */
+    block_read(&superblock, 0, 1);
+
+    /* read bitmaps */
+    block_read(&bitmap, 1, 1);
 
     return NULL;
 }
@@ -90,7 +101,140 @@ void* fs_init(struct fuse_conn_info *conn)
  *    free(_path);
  */
 
+static int parse_path(char *path, char **pathv) {
+    // char * token = strtok(path, "/");
+    // int count = 0;
+    // while (token != NULL) {
+    //     pathv[count] = token;
+    //     count++;
+    //     token = strtok(NULL, "/");
+    // }
+    // return count;
 
+    int i;
+    for (i = 0; i < MAX_PATH_LEN; i++) {
+        if ((pathv[i] = strtok(path, "/")) == NULL) break;
+        if (strlen(pathv[i]) > MAX_NAME_LEN)
+            pathv[i][MAX_NAME_LEN] = 0;  // truncate to 27 characters
+        path = NULL;
+    }
+    return i;
+}
+
+static int translate(char *path) {
+    char *pathv[10];
+    int pathc = parse_path(path, pathv);
+    int inum = 2;  // root inode
+    for (int i = 0; i < pathc; i++) {
+        struct fs_inode _in;
+        block_read(&_in, inum, 1);
+        if (!S_ISDIR(_in.mode)) {
+            return -ENOTDIR;
+        }
+        int blknum = _in.ptrs[0];  // ptrs are a list of block numbers
+        struct fs_dirent des[MAX_DIREN_NUM];
+        block_read(des, blknum, 1);
+        int entry_found = 0;
+        for (int j = 0; j < MAX_DIREN_NUM; j++) {
+            if (des[j].valid && strcmp(des[j].name, pathv[i]) == 0) {
+                inum = des[j].inode;
+                entry_found = 1;
+                break;
+            }
+        }
+        if (!entry_found) return -ENOENT;
+    }
+    return inum;
+}
+
+static int find_enclosing(char *path) {
+    char *pathv[10];
+    int pathc = parse_path(path, pathv);
+    // enclosing node of root node isn't defined.
+    if (pathc == 0) return -ENOTSUP;
+    int inum = 2;  // root inode
+
+    for (int i = 0; i < pathc - 1; i++) {
+        struct fs_inode _in;
+        block_read(&_in, inum, 1);
+        if (!S_ISDIR(_in.mode)) {
+            return -ENOTDIR;
+        }
+        int blknum = _in.ptrs[0];  // ptrs are a list of block numbers
+        struct fs_dirent des[MAX_DIREN_NUM];
+        block_read(des, blknum, 1);
+        int entry_found = 0;
+        for (int j = 0; j < MAX_DIREN_NUM; j++) {
+            if (des[j].valid && strcmp(des[j].name, pathv[i]) == 0) {
+                inum = des[j].inode;
+                entry_found = 1;
+                break;
+            }
+        }
+        if (!entry_found) return -ENOENT;
+    }
+    return inum;
+}
+
+int truncate_path(const char *path, char **truncated_path) {
+    int i = strlen(path) - 1;
+    // strip the tailling '/'
+    // deal with '///' case
+    for (; i >= 0; i--) {
+        if (path[i] != '/') {
+            break;
+        }
+    }
+    for (; i >= 0; i--) {
+        if (path[i] == '/') {
+            *truncated_path = (char *)malloc(sizeof(char) * (i + 2));
+            memcpy(*truncated_path, path, i + 1);
+            (*truncated_path)[i + 1] = '\0';
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* setattr - set file or directory attributes. */
+static void set_attr(struct fs_inode inode, struct stat *sb) {
+    /* set every other bit to zero */
+    memset(sb, 0, sizeof(struct stat));
+    sb->st_mode = inode.mode;
+    sb->st_uid = inode.uid;
+    sb->st_gid = inode.gid;
+    sb->st_size = inode.size;
+    sb->st_blksize = FS_BLOCK_SIZE;
+    sb->st_blocks = (inode.size + FS_BLOCK_SIZE - 1) / FS_BLOCK_SIZE;
+    sb->st_nlink = 1;
+    sb->st_atime = inode.mtime;
+    sb->st_ctime = inode.ctime;
+    sb->st_mtime = inode.mtime;
+}
+
+/* check whether this inode is a directory */
+int inode_is_dir(int father_inum, int inum) {
+    struct fs_inode *inode;
+    struct fs_dirent *dir;
+    dir = malloc(FS_BLOCK_SIZE);
+
+    inode = &inode_region[father_inum];
+    int block_pos = inode->ptrs[0];
+    block_write(dir, block_pos, 1);
+    int i;
+    for (i = 0; i < 32; i++) {
+        if (dir[i].valid == 0) {
+            continue;
+        }
+        if (dir[i].inode == inum) {
+            int result = dir[i].inode;
+            free(dir);
+            return result;
+        }
+    }
+    free(dir);
+    return 0;
+}
 
 /* getattr - get file or directory attributes. For a description of
  *  the fields in 'struct stat', see 'man lstat'.
@@ -105,29 +249,68 @@ void* fs_init(struct fuse_conn_info *conn)
  * hint - factor out inode-to-struct stat conversion - you'll use it
  *        again in readdir
  */
-int fs_getattr(const char *path, struct stat *sb)
-{
+int fs_getattr(const char *path, struct stat *sb) {
     /* your code here */
-    return -EOPNOTSUPP;
+    fs_init(NULL);
+    char *_path = strdup(path);
+    int inum = translate(_path);
+    free(_path);
+    if (inum == -ENOENT || inum == -ENOTDIR || inum == -EOPNOTSUPP) {
+        return inum;
+    }
+
+    struct fs_inode inode;
+    block_read(&inode, inum, 1);
+    set_attr(inode, sb);
+
+    return 0;
 }
 
 /* readdir - get directory contents.
  *
- * call the 'filler' function once for each valid entry in the 
+ * call the 'filler' function once for each valid entry in the
  * directory, as follows:
  *     filler(buf, <name>, <statbuf>, 0)
  * where <statbuf> is a pointer to a struct stat
  * success - return 0
  * errors - path resolution, ENOTDIR, ENOENT
- * 
+ *
  * hint - check the testing instructions if you don't understand how
  *        to call the filler function
  */
 int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
-		       off_t offset, struct fuse_file_info *fi)
-{
-    /* your code here */
-    return -EOPNOTSUPP;
+               off_t offset, struct fuse_file_info *fi) {
+    char *_path = strdup(path);
+    int inum = translate(_path);
+    free(_path);
+    if (inum == -ENOTDIR || inum == -ENOENT) {
+        return inum;
+    }
+    // if result path inode isn't directory return error.
+    struct fs_inode _in;
+    block_read(&_in, inum, 1);
+    if (!S_ISDIR(_in.mode)) {
+        return -ENOTDIR;
+    }
+
+    int blknum = _in.ptrs[0];  // ptrs are a list of block numbers
+
+    struct fs_dirent des[MAX_DIREN_NUM];
+
+    block_read(des, blknum, 1);
+    // filler prototype
+    // int test_filler(void *ptr, const char *name, const struct stat *st, off_t
+    // off)
+    for (int i = 0; i < MAX_DIREN_NUM; i++) {
+        if (des[i].valid) {
+            struct stat sb;
+            struct fs_inode dir_entry_inode;
+            block_read(&dir_entry_inode, des[i].inode, 1);
+            set_attr(dir_entry_inode, &sb);
+            filler(ptr, des[i].name, &sb, 0);
+        }
+    }
+    return 0;
 }
 
 /* create - create a new file with specified permissions
@@ -144,8 +327,7 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
  * If there are already 128 entries in the directory (i.e. it's filled an
  * entire block), you are free to return -ENOSPC instead of expanding it.
  */
-int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
-{
+int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     /* your code here */
     return -EOPNOTSUPP;
 }
@@ -157,21 +339,18 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
  *
  * success - return 0
  * Errors - path resolution, EEXIST
- * Conditions for EEXIST are the same as for create. 
- */ 
-int fs_mkdir(const char *path, mode_t mode)
-{
+ * Conditions for EEXIST are the same as for create.
+ */
+int fs_mkdir(const char *path, mode_t mode) {
     /* your code here */
     return -EOPNOTSUPP;
 }
-
 
 /* unlink - delete a file
  *  success - return 0
  *  errors - path resolution, ENOENT, EISDIR
  */
-int fs_unlink(const char *path)
-{
+int fs_unlink(const char *path) {
     /* your code here */
     return -EOPNOTSUPP;
 }
@@ -180,10 +359,30 @@ int fs_unlink(const char *path)
  *  success - return 0
  *  Errors - path resolution, ENOENT, ENOTDIR, ENOTEMPTY
  */
-int fs_rmdir(const char *path)
-{
+int fs_rmdir(const char *path) {
     /* your code here */
     return -EOPNOTSUPP;
+}
+
+static int is_in_same_directory(char *src_path, char *dst_path,
+                                char *src_pathv[], int *src_pathc,
+                                char *dst_pathv[], int *dst_pathc) {
+    *src_pathc = parse_path(src_path, src_pathv);
+    *dst_pathc = parse_path(dst_path, dst_pathv);
+    if (*src_pathc != *dst_pathc) return -1;
+    for (int i = 0; i < *src_pathc - 1; i++) {
+        if (strcmp(src_pathv[i], dst_pathv[i]) != 0) return -1;
+    }
+    return 1;
+}
+
+static int exists_in_directory(struct fs_dirent des[], char *name) {
+    for (int i = 0; i < MAX_DIREN_NUM; i++) {
+        if (des[i].valid && strcmp(des[i].name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 /* rename - rename a file or directory
@@ -199,10 +398,44 @@ int fs_rmdir(const char *path)
  * particular, the full version can move across directories, replace a
  * destination file, and replace an empty directory with a full one.
  */
-int fs_rename(const char *src_path, const char *dst_path)
-{
+int fs_rename(const char *src_path, const char *dst_path) {
     /* your code here */
-    return -EOPNOTSUPP;
+    char *dup_src = strdup(src_path);
+    char *dup_dst = strdup(dst_path);
+    char *src_pathv[MAX_PATH_LEN];
+    char *dst_pathv[MAX_PATH_LEN];
+    int src_pathc;
+    int dst_pathc;
+    int same_dir = is_in_same_directory(dup_src, dup_dst, src_pathv, &src_pathc,
+                                        dst_pathv, &dst_pathc);
+    if (same_dir == -1) return -EINVAL;
+
+    char *_scr_path = strdup(src_path);
+    int enc_inum = find_enclosing(_scr_path);
+    // enclosed directory inum.
+    if (enc_inum < 0) return enc_inum;
+    struct fs_inode _in;
+    block_read(&_in, enc_inum, 1);
+
+    char *src_name = src_pathv[src_pathc - 1];
+    char *dst_name = dst_pathv[dst_pathc - 1];
+    int blknum = _in.ptrs[0];
+    struct fs_dirent direns[MAX_DIREN_NUM];
+    block_read(direns, blknum, 1);
+    int src_entry_idx = exists_in_directory(direns, src_name);
+    // source does not exist
+    if (src_entry_idx == -1) return -ENOENT;
+    // destination already exists
+    if (exists_in_directory(direns, dst_name) >= 0) return -EEXIST;
+
+    memcpy(direns[src_entry_idx].name, dst_name, MAX_NAME_LEN);
+
+    block_write(direns, blknum, 1);
+
+    free(_scr_path);
+    free(dup_src);
+    free(dup_dst);
+    return 0;
 }
 
 /* chmod - change file permissions
@@ -212,14 +445,28 @@ int fs_rename(const char *src_path, const char *dst_path)
  * success - return 0
  * Errors - path resolution, ENOENT.
  */
-int fs_chmod(const char *path, mode_t mode)
-{
+int fs_chmod(const char *path, mode_t mode) {
     /* your code here */
-    return -EOPNOTSUPP;
+    char *_path = strdup(path);
+    int inum = translate(_path);
+    free(_path);
+    if (inum < 0) {
+        return inum;
+    }
+    mode_t new_permission = mode & 0000777;
+
+    struct fs_inode _in;
+    block_read(&_in, inum, 1);
+    // S_IFMT     0170000   bit mask for the file type bit field
+    //  chmod should only change last 9 bit of mode
+    mode_t file_type = _in.mode & S_IFMT;
+
+    _in.mode = file_type | new_permission;
+    block_write(&_in, inum, 1);
+    return 0;
 }
 
-int fs_utime(const char *path, struct utimbuf *ut)
-{
+int fs_utime(const char *path, struct utimbuf *ut) {
     /* your code here */
     return -EOPNOTSUPP;
 }
@@ -229,18 +476,15 @@ int fs_utime(const char *path, struct utimbuf *ut)
  * Errors - path resolution, ENOENT, EISDIR, EINVAL
  *    return EINVAL if len > 0.
  */
-int fs_truncate(const char *path, off_t len)
-{
+int fs_truncate(const char *path, off_t len) {
     /* you can cheat by only implementing this for the case of len==0,
      * and an error otherwise.
      */
-    if (len != 0)
-	return -EINVAL;		/* invalid argument */
+    if (len != 0) return -EINVAL; /* invalid argument */
 
     /* your code here */
     return -EOPNOTSUPP;
 }
-
 
 /* read - read data from an open file.
  * success: should return exactly the number of bytes requested, except:
@@ -250,10 +494,48 @@ int fs_truncate(const char *path, off_t len)
  * Errors - path resolution, ENOENT, EISDIR
  */
 int fs_read(const char *path, char *buf, size_t len, off_t offset,
-	    struct fuse_file_info *fi)
-{
+            struct fuse_file_info *fi) {
     /* your code here */
-    return -EOPNOTSUPP;
+    int byte_read = 0;
+    char *_path = strdup(path);
+    int inum = translate(_path);
+    if (inum == ENOENT || inum == ENOTDIR) return inum;
+    struct fs_inode _in;
+    block_read(&_in, inum, 1);
+    // inode isn't a file return EISDIR
+    if (!S_ISREG(_in.mode)) return EISDIR;
+
+    int file_len = _in.size;
+    if (offset >= file_len) return byte_read;
+
+    int end = (offset + len >= file_len ? file_len : offset + len) - 1;
+    int curr_ptr = offset;
+    int buf_ptr = 0;
+    for (int i = 0; curr_ptr <= end; i++) {
+        // offset is smaller than current block ends, start reading.
+        if (((i + 1) * FS_BLOCK_SIZE) > offset) {
+            int lba = _in.ptrs[i];
+            char tmp[FS_BLOCK_SIZE];
+            block_read(tmp, lba, 1);
+
+            int blck_read_start = 0;
+            // offset is larger than current block start, shift blck start to
+            // offset position.
+            if (offset > i * FS_BLOCK_SIZE)
+                blck_read_start = offset - i * FS_BLOCK_SIZE;
+            int blck_ptr = blck_read_start;
+            // copy until end of read or end of block.
+            while (curr_ptr <= end && blck_ptr < FS_BLOCK_SIZE) {
+                // printf("in fs_read: curr blck #: %d, char: %c\n buffer:
+                // %s\n", i, tmp[blck_ptr], buf);
+                buf[buf_ptr++] = tmp[blck_ptr++];
+                curr_ptr++;
+            }
+            if (curr_ptr > end) break;
+        }
+    }
+    byte_read = curr_ptr - offset;
+    return byte_read;
 }
 
 /* write - write data to a file
@@ -261,12 +543,11 @@ int fs_read(const char *path, char *buf, size_t len, off_t offset,
  *           the number requested, or else it's an error)
  * Errors - path resolution, ENOENT, EISDIR
  *  return EINVAL if 'offset' is greater than current file length.
- *  (POSIX semantics support the creation of files with "holes" in them, 
+ *  (POSIX semantics support the creation of files with "holes" in them,
  *   but we don't)
  */
-int fs_write(const char *path, const char *buf, size_t len,
-	     off_t offset, struct fuse_file_info *fi)
-{
+int fs_write(const char *path, const char *buf, size_t len, off_t offset,
+             struct fuse_file_info *fi) {
     /* your code here */
     return -EOPNOTSUPP;
 }
@@ -275,8 +556,7 @@ int fs_write(const char *path, const char *buf, size_t len,
  * see 'man 2 statfs' for description of 'struct statvfs'.
  * Errors - none. Needs to work.
  */
-int fs_statfs(const char *path, struct statvfs *st)
-{
+int fs_statfs(const char *path, struct statvfs *st) {
     /* needs to return the following fields (set others to zero):
      *   f_bsize = BLOCK_SIZE
      *   f_blocks = total image - (superblock + block map)
@@ -289,26 +569,24 @@ int fs_statfs(const char *path, struct statvfs *st)
      */
     /* your code here */
     st->f_bsize = FS_BLOCK_SIZE;
-    int block_map = sizeof(superblock.pad);
-    st->f_blocks = superblock.disk_size - (1 + block_map);
-    
-    int i = 0, num_free_blocks = 0;
-    
-    for (i = 0; i < superblock.disk_size; i++) {
-            num_free_blocks++;
+    st->f_blocks = superblock.disk_size - 2;
+    int free_num = 0;
+    for (int i = 0; i < superblock.disk_size; i++) {
+        // TODO bit_test true if occupied?
+        if (!bit_test(bitmap, i)) {
+            free_num++;
+        }
     }
-
-    st->f_bfree = num_free_blocks;
-    st->f_bavail = num_free_blocks;
-    st->f_namemax = FILENAME_MAXLENGTH;
-
-    return -EOPNOTSUPP;
+    st->f_bfree = free_num;
+    st->f_bavail = free_num;
+    st->f_namemax = MAX_NAME_LEN;
+    return 0;
 }
 
 /* operations vector. Please don't rename it, or else you'll break things
  */
 struct fuse_operations fs_ops = {
-    .init = fs_init,            /* read-mostly operations */
+    .init = fs_init, /* read-mostly operations */
     .getattr = fs_getattr,
     .readdir = fs_readdir,
     .rename = fs_rename,
@@ -316,7 +594,7 @@ struct fuse_operations fs_ops = {
     .read = fs_read,
     .statfs = fs_statfs,
 
-    .create = fs_create,        /* write operations */
+    .create = fs_create, /* write operations */
     .mkdir = fs_mkdir,
     .unlink = fs_unlink,
     .rmdir = fs_rmdir,
@@ -324,4 +602,3 @@ struct fuse_operations fs_ops = {
     .truncate = fs_truncate,
     .write = fs_write,
 };
-
