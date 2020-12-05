@@ -172,6 +172,35 @@ static int translate(char *path) {
     return inum;
 }
 
+static int find_enclosing(char *path) {
+    char *pathv[10];
+    int pathc = parse_path(path, pathv);
+    // enclosing node of root node isn't defined.
+    if (pathc == 0) return -ENOTSUP;
+    int inum = 2;  // root inode
+
+    for (int i = 0; i < pathc - 1; i++) {
+        struct fs_inode _in;
+        block_read(&_in, inum, 1);
+        if (!S_ISDIR(_in.mode)) {
+            return -ENOTDIR;
+        }
+        int blknum = _in.ptrs[0];  // ptrs are a list of block numbers
+        struct fs_dirent des[MAX_DIREN_NUM];
+        block_read(des, blknum, 1);
+        int entry_found = 0;
+        for (int j = 0; j < MAX_DIREN_NUM; j++) {
+            if (des[j].valid && strcmp(des[j].name, pathv[i]) == 0) {
+                inum = des[j].inode;
+                entry_found = 1;
+                break;
+            }
+        }
+        if (!entry_found) return -ENOENT;
+    }
+    return inum;
+}
+
 int truncate_path(const char *path, char **truncated_path) {
     int i = strlen(path) - 1;
     // strip the tailling '/'
@@ -361,6 +390,27 @@ int fs_rmdir(const char *path) {
     return -EOPNOTSUPP;
 }
 
+static int is_in_same_directory(char *src_path, char *dst_path,
+                                char *src_pathv[], int *src_pathc,
+                                char *dst_pathv[], int *dst_pathc) {
+    *src_pathc = parse_path(src_path, src_pathv);
+    *dst_pathc = parse_path(dst_path, dst_pathv);
+    if (*src_pathc != *dst_pathc) return -1;
+    for (int i = 0; i < *src_pathc - 1; i++) {
+        if (strcmp(src_pathv[i], dst_pathv[i]) != 0) return -1;
+    }
+    return 1;
+}
+
+static int exists_in_directory(struct fs_dirent des[], char *name) {
+    for (int i = 0; i < MAX_DIREN_NUM; i++) {
+        if (des[i].valid && strcmp(des[i].name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 /* rename - rename a file or directory
  * success - return 0
  * Errors - path resolution, ENOENT, EINVAL, EEXIST
@@ -376,7 +426,42 @@ int fs_rmdir(const char *path) {
  */
 int fs_rename(const char *src_path, const char *dst_path) {
     /* your code here */
-    return -EOPNOTSUPP;
+    char *dup_src = strdup(src_path);
+    char *dup_dst = strdup(dst_path);
+    char *src_pathv[MAX_PATH_LEN];
+    char *dst_pathv[MAX_PATH_LEN];
+    int src_pathc;
+    int dst_pathc;
+    int same_dir = is_in_same_directory(dup_src, dup_dst, src_pathv, &src_pathc,
+                                        dst_pathv, &dst_pathc);
+    if (same_dir == -1) return -EINVAL;
+
+    char *_scr_path = strdup(src_path);
+    int enc_inum = find_enclosing(_scr_path);
+    // enclosed directory inum.
+    if (enc_inum < 0) return enc_inum;
+    struct fs_inode _in;
+    block_read(&_in, enc_inum, 1);
+
+    char *src_name = src_pathv[src_pathc - 1];
+    char *dst_name = dst_pathv[dst_pathc - 1];
+    int blknum = _in.ptrs[0];
+    struct fs_dirent direns[MAX_DIREN_NUM];
+    block_read(direns, blknum, 1);
+    int src_entry_idx = exists_in_directory(direns, src_name);
+    // source does not exist
+    if (src_entry_idx == -1) return -ENOENT;
+    // destination already exists
+    if (exists_in_directory(direns, dst_name) >= 0) return -EEXIST;
+
+    strncpy(direns[src_entry_idx].name, dst_name, MAX_NAME_LEN);
+
+    block_write(direns, blknum, 1);
+
+    free(_scr_path);
+    free(dup_src);
+    free(dup_dst);
+    return 0;
 }
 
 /* chmod - change file permissions
