@@ -568,7 +568,7 @@ int main(int argc, char **argv) {
     tcase_add_test(tc_rename_dir, fsrename_dir_test);
     tcase_add_test(tc_rename_error, fsrename_error_test);
 
-    // suite_add_tcase(s, tc);
+    suite_add_tcase(s, tc);
     /* TODO: Uncomment below testcases one by one.*/
 
     suite_add_tcase(s, tc_sample_getattr);

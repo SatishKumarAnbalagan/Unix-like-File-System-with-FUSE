@@ -44,7 +44,6 @@ struct fs_super superblock;
 unsigned char bitmap[FS_BLOCK_SIZE];
 fd_set *inode_map;
 fd_set *block_map;
-
 struct fs_inode *inode_region; /* inodes in memory */
 int inode_map_sz;
 int block_map_sz;
@@ -58,8 +57,7 @@ int truncate_path(const char *path, char **truncated_path);
 /* translate: return the inode number of given path */
 static int translate(char *path);
 
-/* bitmap functions
- */
+/* bitmap functions */
 void bit_set(unsigned char *map, int i) { map[i / 8] |= (1 << (i % 8)); }
 void bit_clear(unsigned char *map, int i) { map[i / 8] &= ~(1 << (i % 8)); }
 int bit_test(unsigned char *map, int i) { return map[i / 8] & (1 << (i % 8)); }
@@ -211,11 +209,6 @@ static void set_attr(struct fs_inode inode, struct stat *sb) {
     sb->st_atime = inode.mtime;
     sb->st_ctime = inode.ctime;
     sb->st_mtime = inode.mtime;
-}
-
-void update_inode(int inum) {
-    int offset = 1 + inode_map_sz + block_map_sz + (inum / 16);
-    // block_write(&inode_region[inum - (inum % 16)], offset, 1);
 }
 
 /* check whether this inode is a directory */
