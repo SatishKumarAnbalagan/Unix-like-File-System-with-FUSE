@@ -487,7 +487,85 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
  */
 int fs_mkdir(const char *path, mode_t mode) {
     /* your code here */
-    return -EOPNOTSUPP;
+
+    mode = mode | S_IFDIR;
+    if (!S_ISDIR(mode)) {
+        return -EINVAL;
+    }
+
+    // check if parent dir exist
+    char *parent_path;
+    if (!truncate_path(path, &parent_path)) {
+        // path is "/"
+        return -1;
+    }
+
+    int inum_dir = translate(parent_path);
+    if (inum_dir == -ENOENT || inum_dir == -ENOTDIR) {
+        return inum_dir;
+    }
+
+    // check if file exists
+    int inum = translate(path);
+    if (inum > 0) {
+        return -EEXIST;
+    }
+
+    struct fs_inode* parent_inode = (struct fs_inode*) malloc(sizeof(struct fs_inode));
+    block_read(parent_inode, inum, 1);
+    if (!S_ISDIR(parent_inode->mode)) {
+        return -ENOTDIR;
+    }
+
+    int no_free_dirent = find_free_dirent_num(parent_inode);
+    if(no_free_dirent < 0) {
+        return -ENOSPC;
+    }
+
+    // // set inode region bitmap
+    // time_t time_raw_format;
+    // time( &time_raw_format );
+    // struct fs_inode new_inode = {
+    //         .uid = getuid(),
+    //         .gid = getgid(),
+    //         .mode = mode,
+    //         .ctime = time_raw_format,
+    //         .mtime = time_raw_format,
+    //         .size = 0,
+    // };
+    // int free_inum = find_free_inode_map_bit();
+    // if (free_inum < 0) {
+    //     return -ENOSPC;
+    // }
+    // bit_set(bitmap, free_inum);
+    // update_bitmap();
+
+    // memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs_inode));
+    // update_inode(free_inum);
+
+    // // set parent_inode dirent then write it
+    // char *_path = strdup(path);
+    // char *tmp_name = get_name(_path);
+    // struct fs_dirent new_dirent = {
+    //         .valid = 1,
+    //         .inode = free_inum,
+    //         .name = "",
+    // };
+    // assert(strlen(tmp_name) < MAX_NAME_LEN);
+    // strncpy(new_dirent.name, tmp_name, strlen(tmp_name));
+    // new_dirent.name[strlen(tmp_name)] = '\0';
+
+    // struct fs_dirent *dir = (struct fs_dirent *)malloc(MAX_DIREN_NUM);
+    // int blknum = (parent_inode->ptrs)[0];
+    // block_read(dir, blknum, 1);
+    // memcpy(&dir[no_free_dirent], &new_dirent, sizeof(struct fs_dirent));
+    // block_write(dir, blknum, 1);
+
+
+    // free(dir);
+    // free(_path);
+    // return 0;
+    
 }
 
 /* unlink - delete a file
