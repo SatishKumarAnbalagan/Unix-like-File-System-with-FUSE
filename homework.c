@@ -52,7 +52,7 @@ struct fs_inode *inode_region; /* inodes in memory */
 int truncate_path(const char *path, char **truncated_path);
 
 /* translate: return the inode number of given path */
-static int translate(char *path);
+static int translate(const char *path);
 
 /* bitmap functions */
 void bit_set(unsigned char *map, int i) { map[i / 8] |= (1 << (i % 8)); }
@@ -98,7 +98,7 @@ void *fs_init(struct fuse_conn_info *conn) {
  *    free(_path);
  */
 
-static int parse_path(char *path, char **pathv) {
+static int parse_path(const char *path, char **pathv) {
     // char * token = strtok(path, "/");
     // int count = 0;
     // while (token != NULL) {
@@ -110,7 +110,7 @@ static int parse_path(char *path, char **pathv) {
 
     int i;
     for (i = 0; i < MAX_PATH_LEN; i++) {
-        if ((pathv[i] = strtok(path, "/")) == NULL) break;
+        if ((pathv[i] = strtok((char*) path, "/")) == NULL) break;
         if (strlen(pathv[i]) > MAX_NAME_LEN)
             pathv[i][MAX_NAME_LEN] = 0;  // truncate to 27 characters
         path = NULL;
@@ -118,7 +118,7 @@ static int parse_path(char *path, char **pathv) {
     return i;
 }
 
-static int translate(char *path) {
+static int translate(const char *path) {
     char *pathv[10];
     int pathc = parse_path(path, pathv);
     int inum = 2;  // root inode
@@ -419,7 +419,7 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
         return -EEXIST;
     }
 
-    struct fs_inode* parent_inode;
+    struct fs_inode* parent_inode = (struct fs_inode*) malloc(sizeof(struct fs_inode));
     block_read(parent_inode, inum, 1);
     if (!S_ISDIR(parent_inode->mode)) {
         return -ENOTDIR;
@@ -505,7 +505,7 @@ int fs_unlink(const char *path) {
         return -EISDIR;
     }
 
-    // TBD fs_truncate
+    // YTD fs_truncate
     int truncate_result = fs_truncate(path, 0);
     if (truncate_result != 0) {
         return truncate_result;
@@ -516,8 +516,8 @@ int fs_unlink(const char *path) {
     int parent_inum = translate(parent_path);
     free(parent_path);
 
-    struct fs_inode* _in;
-    block_read(_in, inum, 1);
+    struct fs_inode* _in = (struct fs_inode*) malloc(sizeof(struct fs_inode));
+    block_read(_in, parent_inum, 1);
     if (!S_ISDIR(_in->mode)) {
         return -ENOTDIR;
     }
