@@ -564,7 +564,7 @@ int fs_mkdir(const char *path, mode_t mode) {
 
     // free(dir);
     // free(_path);
-    // return 0;
+    return 0;
     
 }
 
