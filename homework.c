@@ -270,6 +270,18 @@ void update_inode(int inum) {
     //block_write(_in, inum, 1);
 }
 
+static char *get_name(char *path) {
+    int i = strlen(path) - 1;
+    for (; i >= 0; i--) {
+        if (path[i] == '/') {
+            i++;
+            break;
+        }
+    }
+    char *result = &path[i];
+    return result;
+}
+
 /* getattr - get file or directory attributes. For a description of
  *  the fields in 'struct stat', see 'man lstat'.
  *
@@ -457,8 +469,7 @@ int fs_mkdir(const char *path, mode_t mode) {
  *  errors - path resolution, ENOENT, EISDIR
  */
 int fs_unlink(const char *path) {
-    /* your code here */
-    return -EOPNOTSUPP;
+
 }
 
 /* rmdir - remove a directory
