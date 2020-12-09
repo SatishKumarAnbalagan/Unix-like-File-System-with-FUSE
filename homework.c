@@ -42,11 +42,8 @@ extern int block_write(void *buf, int lba, int nblks);
 /* global variables */
 struct fs_super superblock;
 unsigned char bitmap[FS_BLOCK_SIZE];
-fd_set *inode_map;
-fd_set *block_map;
+
 struct fs_inode *inode_region; /* inodes in memory */
-int block_map_sz;
-int num_of_blocks;
 
 /* function declaration */
 
