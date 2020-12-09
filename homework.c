@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <assert.h>
 
 #include "fs5600.h"
 
@@ -282,6 +283,27 @@ static char *get_name(char *path) {
     return result;
 }
 
+static int is_in_same_directory(char *src_path, char *dst_path,
+                                char *src_pathv[], int *src_pathc,
+                                char *dst_pathv[], int *dst_pathc) {
+    *src_pathc = parse_path(src_path, src_pathv);
+    *dst_pathc = parse_path(dst_path, dst_pathv);
+    if (*src_pathc != *dst_pathc) return -1;
+    for (int i = 0; i < *src_pathc - 1; i++) {
+        if (strcmp(src_pathv[i], dst_pathv[i]) != 0) return -1;
+    }
+    return 1;
+}
+
+static int exists_in_directory(struct fs_dirent des[], char *name) {
+    for (int i = 0; i < MAX_DIREN_NUM; i++) {
+        if (des[i].valid && strcmp(des[i].name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
 /* getattr - get file or directory attributes. For a description of
  *  the fields in 'struct stat', see 'man lstat'.
  *
@@ -397,7 +419,12 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
         return -EEXIST;
     }
 
-    struct fs_inode *parent_inode = &inode_region[inum_dir];
+    struct fs_inode* parent_inode;
+    block_read(parent_inode, inum, 1);
+    if (!S_ISDIR(parent_inode->mode)) {
+        return -ENOTDIR;
+    }
+
     int no_free_dirent = find_free_dirent_num(parent_inode);
     if(no_free_dirent < 0) {
         return -ENOSPC;
@@ -423,7 +450,6 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 
     memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs_inode));
     update_inode(free_inum);
-
 
     // set parent_inode dirent then write it
     char *_path = strdup(path);
@@ -469,7 +495,53 @@ int fs_mkdir(const char *path, mode_t mode) {
  *  errors - path resolution, ENOENT, EISDIR
  */
 int fs_unlink(const char *path) {
+    /* your code here */
+    int inum = translate(path);
+    if (inum == -ENOENT || inum == -ENOTDIR) {
+        return inum;
+    }
+    struct fs_inode *inode = &inode_region[inum];
+    if  (S_ISDIR(inode->mode)) {
+        return -EISDIR;
+    }
 
+    // TBD fs_truncate
+    int truncate_result = fs_truncate(path, 0);
+    if (truncate_result != 0) {
+        return truncate_result;
+    }
+
+    char *parent_path;
+    truncate_path(path, &parent_path);
+    int parent_inum = translate(parent_path);
+    free(parent_path);
+
+    struct fs_inode* _in;
+    block_read(_in, inum, 1);
+    if (!S_ISDIR(_in->mode)) {
+        return -ENOTDIR;
+    }
+    int blknum = _in->ptrs[0];
+
+    // clear inode_map corresponding bit
+    bit_clear(bitmap, inum);
+    update_bitmap();
+
+    // remove entry from father dir
+    char *_path = strdup(path);
+    char *name = get_name(_path);
+
+    struct fs_dirent *_dir = malloc(FS_BLOCK_SIZE);
+    block_read(_dir, blknum, 1);
+    int found = exists_in_directory(_dir, name);
+    block_write(_dir, blknum, 1);
+    if (!found) {
+        return -ENOENT;
+    }
+
+    free(_dir);
+    free(_path);
+    return 0;
 }
 
 /* rmdir - remove a directory
@@ -479,27 +551,6 @@ int fs_unlink(const char *path) {
 int fs_rmdir(const char *path) {
     /* your code here */
     return -EOPNOTSUPP;
-}
-
-static int is_in_same_directory(char *src_path, char *dst_path,
-                                char *src_pathv[], int *src_pathc,
-                                char *dst_pathv[], int *dst_pathc) {
-    *src_pathc = parse_path(src_path, src_pathv);
-    *dst_pathc = parse_path(dst_path, dst_pathv);
-    if (*src_pathc != *dst_pathc) return -1;
-    for (int i = 0; i < *src_pathc - 1; i++) {
-        if (strcmp(src_pathv[i], dst_pathv[i]) != 0) return -1;
-    }
-    return 1;
-}
-
-static int exists_in_directory(struct fs_dirent des[], char *name) {
-    for (int i = 0; i < MAX_DIREN_NUM; i++) {
-        if (des[i].valid && strcmp(des[i].name, name) == 0) {
-            return i;
-        }
-    }
-    return -1;
 }
 
 /* rename - rename a file or directory
