@@ -496,7 +496,6 @@ int fs_mkdir(const char *path, mode_t mode) {
     // check if parent dir exist
     char *parent_path;
     if (!truncate_path(path, &parent_path)) {
-        // path is "/"
         return -1;
     }
 
@@ -522,6 +521,11 @@ int fs_mkdir(const char *path, mode_t mode) {
         return -ENOSPC;
     }
 
+    //dir check
+    if (!S_ISDIR(parent_inode->mode)) {
+        return -ENOTDIR;
+    }
+    
     // // set inode region bitmap
     // time_t time_raw_format;
     // time( &time_raw_format );
