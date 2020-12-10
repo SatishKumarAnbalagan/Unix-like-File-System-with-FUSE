@@ -661,10 +661,6 @@ int fs_rmdir(const char *path) {
     if (inum == -ENOENT || inum == -ENOTDIR) {
         return inum;
     }
-    struct fs_inode *inode = &inode_region[inum];
-    if  (S_ISDIR(inode->mode)) {
-        return -EISDIR;
-    }
 
     char *parent_path;
     int truncate_result = truncate_path(path, &parent_path);
@@ -673,35 +669,49 @@ int fs_rmdir(const char *path) {
         return truncate_result;
     }
 
-    // int parent_inum = translate(parent_path);
-    // free(parent_path);
+    int parent_inum = translate(parent_path);
+    // remove entry from parent dir
+    char *_path = strdup(path);
+    if (_path[strlen(_path) - 1] == '/') {
+		_path[strlen(_path) - 1] = '\0';
+	}
+    char *name = get_name(_path);
+    free(parent_path);
 
-    // struct fs_inode* _in = (struct fs_inode*) malloc(sizeof(struct fs_inode));
-    // block_read(_in, parent_inum, 1);
-    // if (!S_ISDIR(_in->mode)) {
-    //     return -ENOTDIR;
-    // }
-    // int blknum = _in->ptrs[0];
+    struct fs_inode* _in = (struct fs_inode*) malloc(sizeof(struct fs_inode));
+    block_read(_in, parent_inum, 1);
+    if (!S_ISDIR(_in->mode)) {
+        free(_in);
+        return -ENOTDIR;
+    }
+    int blknum = _in->ptrs[0];
+    struct fs_dirent *_dir = malloc(FS_BLOCK_SIZE);
+    block_read(_dir, blknum, 1);
+    int found = exists_in_directory(_dir, name);
 
-    // // clear inode_map corresponding bit
-    // bit_clear(bitmap, inum);
-    // update_bitmap();
+    if (!found) {
+        free(_dir);
+        return -ENOENT;
+    }
 
-    // // remove entry from father dir
-    // char *_path = strdup(path);
-    // char *name = get_name(_path);
+    // clear inode_map corresponding bit
+    bit_clear(bitmap, inum);
+    update_bitmap();
 
-    // struct fs_dirent *_dir = malloc(FS_BLOCK_SIZE);
-    // block_read(_dir, blknum, 1);
-    // int found = exists_in_directory(_dir, name);
-    // block_write(_dir, blknum, 1);
-    // if (!found) {
-    //     return -ENOENT;
-    // }
+    struct fs_dirent *_pdir = malloc(FS_BLOCK_SIZE);
+    block_read(_pdir, blknum, 1);
+    found = exists_in_directory(_dir, name);
+    if (!found) {
+        free(_pdir);
+        return -ENOENT;
+    }
+    block_write(_dir, blknum, 1);
 
-    // free(_dir);
-    // free(_path);
-    // return 0;
+    free(_dir);
+    free(_pdir);
+    free(_path);
+    free(_in);
+    return 0;
 }
 
 /* rename - rename a file or directory
