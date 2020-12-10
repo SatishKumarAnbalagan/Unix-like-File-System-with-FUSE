@@ -526,23 +526,25 @@ int fs_mkdir(const char *path, mode_t mode) {
         return -ENOTDIR;
     }
     
-    // // set inode region bitmap
-    // time_t time_raw_format;
-    // time( &time_raw_format );
-    // struct fs_inode new_inode = {
-    //         .uid = getuid(),
-    //         .gid = getgid(),
-    //         .mode = mode,
-    //         .ctime = time_raw_format,
-    //         .mtime = time_raw_format,
-    //         .size = 0,
-    // };
-    // int free_inum = find_free_inode_map_bit();
-    // if (free_inum < 0) {
-    //     return -ENOSPC;
-    // }
-    // bit_set(bitmap, free_inum);
-    // update_bitmap();
+    // set inode region bitmap
+    time_t time_raw_format;
+    time( &time_raw_format );
+    struct fs_inode new_inode = {
+            .uid = getuid(),
+            .gid = getgid(),
+            .mode = mode,
+            .ctime = time_raw_format,
+            .mtime = time_raw_format,
+            .size = 0,
+            .ptrs = {0}
+    };
+
+    int free_inum = 0; // TBD gotta find no free blocks;
+    if (free_inum < 0) {
+        return -ENOSPC;
+    }
+    bit_set(bitmap, free_inum);
+    update_bitmap();
 
     // memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs_inode));
     // update_inode(free_inum);
