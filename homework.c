@@ -472,7 +472,7 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
             .name = "",
     };
     assert(strlen(tmp_name) < MAX_NAME_LEN);
-    strncpy(new_dirent.name, tmp_name, strlen(tmp_name));
+    memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
     new_dirent.name[strlen(tmp_name)] = '\0';
 
     struct fs_dirent *dir = (struct fs_dirent *)malloc(MAX_DIREN_NUM);
@@ -570,32 +570,31 @@ int fs_mkdir(const char *path, mode_t mode) {
     bit_set(bitmap, free_inum);
     update_bitmap();
 
-    // memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs_inode));
-    // update_inode(free_inum);
+    memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs_inode));
+    update_inode(free_inum);
 
-    // // set parent_inode dirent then write it
-    // char *_path = strdup(path);
-    // char *tmp_name = get_name(_path);
-    // struct fs_dirent new_dirent = {
-    //         .valid = 1,
-    //         .inode = free_inum,
-    //         .name = "",
-    // };
-    // assert(strlen(tmp_name) < MAX_NAME_LEN);
-    // strncpy(new_dirent.name, tmp_name, strlen(tmp_name));
-    // new_dirent.name[strlen(tmp_name)] = '\0';
+    // set parent_inode dirent then write it
+    char *_path = strdup(path);
+    char *tmp_name = get_name(_path);
+    struct fs_dirent new_dirent = {
+            .valid = 1,
+            .inode = free_inum,
+            .name = "",
+    };
+    assert(strlen(tmp_name) < MAX_NAME_LEN);
+    memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
+    new_dirent.name[strlen(tmp_name)] = '\0';
 
-    // struct fs_dirent *dir = (struct fs_dirent *)malloc(MAX_DIREN_NUM);
-    // int blknum = (parent_inode->ptrs)[0];
-    // block_read(dir, blknum, 1);
-    // memcpy(&dir[no_free_dirent], &new_dirent, sizeof(struct fs_dirent));
-    // block_write(dir, blknum, 1);
+    struct fs_dirent *dir = (struct fs_dirent *)malloc(MAX_DIREN_NUM);
+    int blknum = (parent_inode->ptrs)[0];
+    block_read(dir, blknum, 1);
+    memcpy(&dir[no_free_dirent], &new_dirent, sizeof(struct fs_dirent));
+    block_write(dir, blknum, 1);
 
-
-    // free(dir);
-    // free(_path);
+    free(free_block);
+    free(dir);
+    free(_path);
     return 0;
-    
 }
 
 /* unlink - delete a file
