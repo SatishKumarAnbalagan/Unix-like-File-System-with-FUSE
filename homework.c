@@ -797,7 +797,18 @@ int fs_chmod(const char *path, mode_t mode) {
 
 int fs_utime(const char *path, struct utimbuf *ut) {
     /* your code here */
-    return -EOPNOTSUPP;
+    int inum = translate(path);
+    if (inum < 0) {
+    	return inum;
+    }
+    struct fs_inode _in;
+    block_read(&_in, inum, 1);
+
+    _in.mtime = ut->modtime;
+    //_in.ctime = ut->actime; not sure
+    block_write(&_in, inum, 1);
+    return 0;
+
 }
 
 /* truncate - truncate file to exactly 'len' bytes
