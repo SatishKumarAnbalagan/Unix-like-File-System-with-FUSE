@@ -304,6 +304,18 @@ static int exists_in_directory(struct fs_dirent des[], char *name) {
     return -1;
 }
 
+int find_free_block_number() {
+    for (int i = 0; i < FS_BLOCK_SIZE * 8; i++) {
+        if (!bit_test(bitmap, i)) {
+            int *free_blk = calloc(1, FS_BLOCK_SIZE);
+            block_write(free_blk, i, 1);
+            free(free_blk);
+            return i;
+        }
+    }
+    return -ENOSPC;
+}
+
 /* getattr - get file or directory attributes. For a description of
  *  the fields in 'struct stat', see 'man lstat'.
  *
@@ -539,8 +551,20 @@ int fs_mkdir(const char *path, mode_t mode) {
             .ptrs = {0}
     };
 
-    int free_inum = 0; // TBD gotta find no free blocks;
+    int free_blk_num = find_free_block_number();
+    if (free_blk_num < 0) {
+        return -ENOSPC;
+    }
+    bit_set(bitmap, free_blk_num);
+    update_bitmap();
+
+    new_inode.ptrs[0] = free_blk_num;
+    int *free_block = (int *)calloc(FS_BLOCK_SIZE, sizeof(int));
+    block_write(free_block, new_inode.ptrs[0], 1);
+
+    int free_inum = find_free_inode_map_bit();
     if (free_inum < 0) {
+        free(free_block);
         return -ENOSPC;
     }
     bit_set(bitmap, free_inum);
