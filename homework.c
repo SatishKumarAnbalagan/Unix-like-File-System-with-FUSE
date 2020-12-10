@@ -823,6 +823,19 @@ int fs_truncate(const char *path, off_t len) {
     if (len != 0) return -EINVAL; /* invalid argument */
 
     /* your code here */
+    int inum = translate(path);
+    if (inum == -ENOENT || inum == -ENOTDIR) {
+        return inum;
+    }
+    struct fs_inode _in;
+    block_read(&_in, inum, 1);
+
+    if  (S_ISDIR(_in.mode)) {
+        return -EISDIR;
+    }
+
+    printf("TBD\n"); // TBD update/clear block bit map & inodes
+
     return -EOPNOTSUPP;
 }
 
