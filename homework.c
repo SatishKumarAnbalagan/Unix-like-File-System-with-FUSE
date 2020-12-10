@@ -657,23 +657,22 @@ int fs_unlink(const char *path) {
  */
 int fs_rmdir(const char *path) {
     /* your code here */
-    // int inum = translate(path);
-    // if (inum == -ENOENT || inum == -ENOTDIR) {
-    //     return inum;
-    // }
-    // struct fs_inode *inode = &inode_region[inum];
-    // if  (S_ISDIR(inode->mode)) {
-    //     return -EISDIR;
-    // }
+    int inum = translate(path);
+    if (inum == -ENOENT || inum == -ENOTDIR) {
+        return inum;
+    }
+    struct fs_inode *inode = &inode_region[inum];
+    if  (S_ISDIR(inode->mode)) {
+        return -EISDIR;
+    }
 
-    // // YTD fs_truncate
-    // int truncate_result = fs_truncate(path, 0);
-    // if (truncate_result != 0) {
-    //     return truncate_result;
-    // }
+    char *parent_path;
+    int truncate_result = truncate_path(path, &parent_path);
+    if (!truncate_result) {
+        printf("ERROR: Deleting the root directory\n");
+        return truncate_result;
+    }
 
-    // char *parent_path;
-    // truncate_path(path, &parent_path);
     // int parent_inum = translate(parent_path);
     // free(parent_path);
 
