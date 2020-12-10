@@ -657,7 +657,52 @@ int fs_unlink(const char *path) {
  */
 int fs_rmdir(const char *path) {
     /* your code here */
-    return -EOPNOTSUPP;
+    // int inum = translate(path);
+    // if (inum == -ENOENT || inum == -ENOTDIR) {
+    //     return inum;
+    // }
+    // struct fs_inode *inode = &inode_region[inum];
+    // if  (S_ISDIR(inode->mode)) {
+    //     return -EISDIR;
+    // }
+
+    // // YTD fs_truncate
+    // int truncate_result = fs_truncate(path, 0);
+    // if (truncate_result != 0) {
+    //     return truncate_result;
+    // }
+
+    // char *parent_path;
+    // truncate_path(path, &parent_path);
+    // int parent_inum = translate(parent_path);
+    // free(parent_path);
+
+    // struct fs_inode* _in = (struct fs_inode*) malloc(sizeof(struct fs_inode));
+    // block_read(_in, parent_inum, 1);
+    // if (!S_ISDIR(_in->mode)) {
+    //     return -ENOTDIR;
+    // }
+    // int blknum = _in->ptrs[0];
+
+    // // clear inode_map corresponding bit
+    // bit_clear(bitmap, inum);
+    // update_bitmap();
+
+    // // remove entry from father dir
+    // char *_path = strdup(path);
+    // char *name = get_name(_path);
+
+    // struct fs_dirent *_dir = malloc(FS_BLOCK_SIZE);
+    // block_read(_dir, blknum, 1);
+    // int found = exists_in_directory(_dir, name);
+    // block_write(_dir, blknum, 1);
+    // if (!found) {
+    //     return -ENOENT;
+    // }
+
+    // free(_dir);
+    // free(_path);
+    // return 0;
 }
 
 /* rename - rename a file or directory
