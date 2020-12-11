@@ -264,6 +264,188 @@ START_TEST(fs_unlink_test) {
 }
 END_TEST
 
+START_TEST(fsmknod_error_test) {
+    printf("fsmknod_error_test\n");
+
+    // bad path /a/b/c - b doesn't exist (should return -ENOENT)
+    mode_t mode = 0777;
+    int expected = -ENOENT;
+    printf("bad path /a/b/c - b doesn't exist (should return %d)\n", expected);
+    int actual = fs_ops.create("/dir3/notexist/file.4k-", mode, NULL);
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // bad path /a/b/c - b isn't directory (ENOTDIR)
+    expected = -ENOTDIR;
+    printf("bad path /a/b/c - b isn't directory (should return %d)\n",
+           expected);
+    actual = fs_ops.create("/dir3/file.12k-/file.4k-", mode, NULL);
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // bad path /a/b/c - c exists, is file (EEXIST)
+    expected = -EEXIST;
+    printf(" bad path /a/b/c - c exists, is file (should return %d)\n",
+           expected);
+    actual = fs_ops.create("/dir3/subdir/file.4k-", mode, NULL);
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // bad path /a/b/c - c exists, is directory (EEXIST)
+    expected = -EEXIST;
+    printf("bad path /a/b/c - c exists, is directory(should return %d)\n",
+           expected);
+    actual = fs_ops.create("/dir3/subdir", mode, NULL);
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // too-long name (more than 27 characters)  either return -EINVAL or
+    // truncate the name.
+
+    expected = -EINVAL;
+    printf(
+        "too-long name (more than 27 characters) (should return %d or truncate "
+        "the name)\n",
+        expected);
+    actual = fs_ops.create(
+        "/dir3/"
+        "longnamefilelongnamefilelongnamefilelongnamefilelongnamefile.txt",
+        mode, NULL);
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+}
+END_TEST
+
+START_TEST(fsmkdir_error_test) {
+    printf("fsmkdir_error_test\n");
+    //     bad path /a/b/c - b doesn't exist (ENOENT)
+    mode_t mode = 0777;
+    int expected = -ENOENT;
+    printf("bad path /a/b/c - b doesn't exist (should return %d)\n", expected);
+    int actual = fs_ops.mkdir("/dir3/notexist/newdir", mode);
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // bad path /a/b/c - b isn't directory (ENOTDIR)
+    expected = -ENOTDIR;
+    printf("bad path /a/b/c - b isn't directory (should return %d)\n",
+           expected);
+    actual = fs_ops.mkdir("/dir3/file.12k-/newdir", mode);
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // bad path /a/b/c - c exists, is file (EEXIST)
+    expected = -EEXIST;
+    printf(" bad path /a/b/c - c exists, is file (should return %d)\n",
+           expected);
+    actual = fs_ops.mkdir("/dir3/subdir/file.4k-", mode);
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // bad path /a/b/c - c exists, is directory (EEXIST)
+    expected = -EEXIST;
+    printf("bad path /a/b/c - c exists, is directory(should return %d)\n",
+           expected);
+    actual = fs_ops.mkdir("/dir3/subdir", mode);
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // too-long name (more than 27 characters)  either return -EINVAL or
+    // truncate the name.
+
+    expected = -EINVAL;
+    printf(
+        "too-long name (more than 27 characters) (should return %d or truncate "
+        "the name)\n",
+        expected);
+    actual = fs_ops.mkdir(
+        "/dir3/"
+        "longnamedirlongnamedirlongnamedirlongnamedirlongnamedirlongnamedir",
+        mode);
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+}
+END_TEST
+
+START_TEST(fs_unlink_error_test) {
+    printf("fs_unlink_error_test\n");
+    //     bad path /a/b/c - b doesn't exist (ENOENT)
+    int expected = -ENOENT;
+    printf("bad path /a/b/c - b doesn't exist (should return %d)\n", expected);
+    int actual = fs_ops.unlink("/dir3/notexist/file.4k-");
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // bad path /a/b/c - b isn't directory (ENOTDIR)
+    expected = -ENOTDIR;
+    printf("bad path /a/b/c - b isn't directory (should return %d)\n",
+           expected);
+    actual = fs_ops.unlink("/dir3/file.12k-/file.4k-");
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // bad path /a/b/c - c not exists, is file (ENOENT)
+    expected = -ENOENT;
+    printf(" bad path /a/b/c - c exists, is file (should return %d)\n",
+           expected);
+    actual = fs_ops.unlink("/dir3/subdir/notexist.txt");
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // bad path /a/b/c - c exists, is directory (EISDIR)
+    expected = -EISDIR;
+    printf("bad path /a/b/c - c exists, is directory(should return %d)\n",
+           expected);
+    actual = fs_ops.unlink("/dir3/subdir");
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+}
+END_TEST
+
+START_TEST(fs_rmdir_error_test) {
+    printf("fs_rmdir_error_test\n");
+    //     bad path /a/b/c - b doesn't exist (ENOENT)
+    int expected = -ENOENT;
+    printf("bad path /a/b/c - b doesn't exist (should return %d)\n", expected);
+    int actual = fs_ops.rmdir("/notexist/subdir");
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // bad path /a/b/c - b isn't directory (ENOTDIR)
+    expected = -ENOTDIR;
+    printf("bad path /a/b/c - b isn't directory (should return %d)\n",
+           expected);
+    actual = fs_ops.rmdir("/dir3/file.12k-/shouldGenerateErorBefore");
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // bad path /a/b/c - c doesn't exist (ENOENT)
+    expected = -ENOENT;
+    printf(" bad path /a/b/c - c doesn't exist (should return %d)\n", expected);
+    actual = fs_ops.unlink("/dir3/subdir/notexist");
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // bad path /a/b/c - c is file (ENOTDIR)
+    expected = -EISDIR;
+    char *enotdirpath = "/dir3/file.12k-";
+    printf("bad path: %s \t /a/b/c - c exists, is file(should return %d)\n",
+           enotdirpath, expected);
+    actual = fs_ops.unlink(enotdirpath);
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+
+    // directory not empty (ENOTEMPTY)
+    expected = -ENOTEMPTY;
+    char *ENOTEMPTY_path = "/dir3/subdir";
+    printf("bad path: %s \t directory not empty (should return %d)\n",
+           ENOTEMPTY_path, expected);
+    actual = fs_ops.unlink(ENOTEMPTY_path);
+    printf("actual status: %d\n", actual);
+    ck_assert_int_eq(expected, actual);
+}
+END_TEST
+
 void reset_testdata() {
     for (int i = 0; mkdir_table[i].childpath != NULL; i++) {
         mkdir_table[i].found = 0;
@@ -305,6 +487,11 @@ int main(int argc, char **argv) {
     setupTestcase(s, "create test", fs_create_test);
     setupTestcase(s, "fs_unlink_test", fs_unlink_test);
     setupTestcase(s, "fs_mkdir_single_test", fs_mkdir_single_test);
+
+    setupTestcase(s, "fs_rmdir_error_test", fs_rmdir_error_test);
+    setupTestcase(s, "fs_unlink_error_test", fs_unlink_error_test);
+    setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
+    setupTestcase(s, "fsmknod_error_test", fsmknod_error_test);
 
     srunner_set_fork_status(sr, CK_NOFORK);
 
