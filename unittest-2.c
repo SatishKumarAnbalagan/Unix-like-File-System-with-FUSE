@@ -5,6 +5,7 @@
 
 #define _FILE_OFFSET_BITS 64
 #define FUSE_USE_VERSION 26
+#define FS_BLOCK_SIZE 4096
 
 #include <check.h>
 #include <errno.h>
@@ -446,6 +447,95 @@ START_TEST(fs_rmdir_error_test) {
 }
 END_TEST
 
+void gen_buff(char *buf, int len) {
+    char *ptr = buf;
+    int i;
+    for (i = 0, ptr = buf; ptr < buf + len; i++) {
+        ptr += sprintf(ptr, "%d ", i);
+    }
+}
+
+void verify_write(char *path, int len, int offset, unsigned expect_cksum) {
+    char *read_buf = malloc(sizeof(char) * len);
+    int byte_read = fs_ops.read(path, read_buf, len, offset, NULL);
+    printf("Test by reading, Actual byte read len: %u", byte_read);
+
+    ck_assert_int_eq(len, byte_read);
+    unsigned read_cksum = crc32(0, (unsigned char *)read_buf, len);
+    printf("Expected cksum %u \t Read checksum is %u \n", expect_cksum, read_cksum);
+
+    ck_assert_int_eq(expect_cksum, read_cksum);
+    free(read_buf);
+}
+
+START_TEST(fswrite_test) {
+    char *path[] = {"/testwrite.text", NULL};
+    int lens[] = {4000};
+    for (int i = 0; path[i] != NULL; i++) {
+        int len = lens[i];
+        char *write_buf = malloc(len);
+        gen_buff(write_buf, len);
+        unsigned write_cksum = crc32(0, (unsigned char *)write_buf, len);
+        printf("Path to write: %s \t size to write: %d \t cksum: %u \n",
+               path[i], len, write_cksum);
+        int byte_written = fs_ops.write(path[i], write_buf, len, 0,
+                                        NULL);  // 4000 bytes, offset=0
+        printf("Byte writte: %d", byte_written);
+
+        ck_assert_int_eq(byte_written, len);
+
+        // Test by reading the written file.
+        verify_write(path[i], len, 0, write_cksum);
+        free(write_buf);
+    }
+}
+END_TEST
+
+// int fs_write(const char *path, const char *buf, size_t len, off_t offset,
+//              struct fuse_file_info *fi)
+START_TEST(fswrite_append_test) {
+    char *paths[] = {"/OneBlock", NULL};
+    int init_lens[] = {FS_BLOCK_SIZE};
+    int after_append_lens[] = {FS_BLOCK_SIZE * 2 - 1};
+    int steps[] = {17, 100, 1000, 1024, 1970, 3000};
+
+    for (int i = 0; paths[i] != NULL; i++) {
+        // TODO: may be wrong here
+        for (int j = 0; j < 6; j++) {
+            char m_path[40];
+            sprintf(m_path, "%s.%d", paths[i], steps[j]);
+            int file_len = after_append_lens[i];
+
+            char *buf = malloc(file_len);
+            gen_buff(buf, init_lens[i]);
+
+            int byte_written = fs_ops.write(paths[i], buf, init_lens[i], 0,
+                                            NULL);  // 4000 bytes, offset=0
+            printf("Init Byte writte: %d ", byte_written);
+            printf("Path is %s\t small chunk append step is %d\n", m_path,
+                   steps[j]);
+
+            // append to file.
+            for (int offset = init_lens[i]; offset < file_len;
+                 offset += steps[j]) {
+                int len_to_write = steps[j];
+                if (steps[j] + offset > file_len) {
+                    len_to_write = file_len - offset;
+                }
+                gen_buff(buf + offset, len_to_write);
+                fs_ops.write(m_path, buf + offset, len_to_write, offset, NULL);
+            }
+
+            unsigned expect_cksum = crc32(0, (unsigned char *)buf, file_len);
+
+            verify_write(m_path, file_len, 0, expect_cksum);
+
+            free(buf);
+        }
+    }
+}
+END_TEST
+
 void reset_testdata() {
     for (int i = 0; mkdir_table[i].childpath != NULL; i++) {
         mkdir_table[i].found = 0;
@@ -492,7 +582,8 @@ int main(int argc, char **argv) {
     setupTestcase(s, "fs_unlink_error_test", fs_unlink_error_test);
     setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
     setupTestcase(s, "fsmknod_error_test", fsmknod_error_test);
-
+    setupTestcase(s, "fswrite_append_test", fswrite_append_test);
+    setupTestcase(s, "fswrite_test", fswrite_test);
     srunner_set_fork_status(sr, CK_NOFORK);
 
     srunner_run_all(sr, CK_VERBOSE);
