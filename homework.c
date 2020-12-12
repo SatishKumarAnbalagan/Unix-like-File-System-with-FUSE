@@ -209,31 +209,8 @@ static void set_attr(struct fs_inode inode, struct stat *sb) {
     sb->st_mtime = inode.mtime;
 }
 
-/* check whether this inode is a directory */
-int inode_is_dir(int father_inum, int inum) {
-    struct fs_inode *inode;
-    struct fs_dirent *dir;
-    dir = (struct fs_dirent *)malloc(MAX_DIREN_NUM);
-
-    inode = &inode_region[father_inum];
-    int block_pos = inode->ptrs[0];
-    block_write(dir, block_pos, 1);
-    int i;
-    for (i = 0; i < MAX_DIREN_NUM; i++) {
-        if (dir[i].valid == 0) {
-            continue;
-        }
-        if (dir[i].inode == inum) {
-            int result = dir[i].inode;
-            free(dir);
-            return result;
-        }
-    }
-    free(dir);
-    return 0;
-}
-
 int find_free_dirent_num(struct fs_inode *inode) {
+    printf("find_free_dirent_num\n");
     struct fs_dirent dir[MAX_DIREN_NUM];
     int blknum = inode->ptrs[0];
     block_read(dir, blknum, 1);
@@ -249,6 +226,7 @@ int find_free_dirent_num(struct fs_inode *inode) {
 }
 
 int find_free_inode_map_bit() {
+    printf("find_free_inode_map_bit\n");
     int inode_capacity = FS_BLOCK_SIZE * 8;
     for (int i = 2; i < inode_capacity; i++) {
         if (!bit_test(bitmap, i)) {
@@ -259,14 +237,12 @@ int find_free_inode_map_bit() {
 }
 
 void update_bitmap() {
+    printf("update_bitmap\n");
     block_write(&bitmap, 1, 1);
-    /* shld we update fs_inode as well ?
-    block_write(_in, inum, 1);
-    */
 }
 
 void update_inode(struct fs_inode *_in, int inum) {
-    //gotta do inode update as well
+    printf("update_inode\n");
     block_write(_in, inum, 1);
 }
 
@@ -408,10 +384,6 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
  */
 int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
 
-    if (!S_ISREG(mode)) {
-        return -EINVAL;
-    }
-
     // check if parent dir exist
     char *parent_path;
     if (!truncate_path(path, &parent_path)) {
@@ -429,9 +401,8 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     if (inum > 0) {
         return -EEXIST;
     }
-
     struct fs_inode parent_inode;
-    block_read(&parent_inode, inum, 1);
+    block_read(&parent_inode, inum_dir, 1);
     if (!S_ISDIR(parent_inode.mode)) {
         return -ENOTDIR;
     }
@@ -509,7 +480,7 @@ int fs_mkdir(const char *path, mode_t mode) {
     if (!truncate_path(path, &parent_path)) {
         return -1;
     }
-    printf("HM : %s, %s\n", path, parent_path);
+
     int inum_dir = translate(parent_path);
     if (inum_dir == -ENOENT || inum_dir == -ENOTDIR) {
         return inum_dir;
@@ -522,7 +493,7 @@ int fs_mkdir(const char *path, mode_t mode) {
     }
 
     struct fs_inode parent_inode;
-    block_read(&parent_inode, inum, 1);
+    block_read(&parent_inode, inum_dir, 1);
 
     int no_free_dirent = find_free_dirent_num(&parent_inode);
     if(no_free_dirent < 0) {
