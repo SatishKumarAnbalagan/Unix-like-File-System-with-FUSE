@@ -234,8 +234,8 @@ int inode_is_dir(int father_inum, int inum) {
 }
 
 int find_free_dirent_num(struct fs_inode *inode) {
-    struct fs_dirent *dir = (struct fs_dirent *)malloc(MAX_DIREN_NUM);
-    int blknum = inode->ptrs[0];  // ptrs are a list of block numbers
+    struct fs_dirent dir[MAX_DIREN_NUM];
+    int blknum = inode->ptrs[0];
     block_read(dir, blknum, 1);
 
     int no_free_dirent = -1;
@@ -245,7 +245,6 @@ int find_free_dirent_num(struct fs_inode *inode) {
             break;
         }
     }
-    free(dir);
     return no_free_dirent;
 }
 
@@ -260,15 +259,15 @@ int find_free_inode_map_bit() {
 }
 
 void update_bitmap() {
-    block_write(bitmap, 1, 1);
+    block_write(&bitmap, 1, 1);
     /* shld we update fs_inode as well ?
     block_write(_in, inum, 1);
     */
 }
 
-void update_inode(int inum) {
+void update_inode(struct fs_inode *_in, int inum) {
     //gotta do inode update as well
-    //block_write(_in, inum, 1);
+    block_write(_in, inum, 1);
 }
 
 static char *get_name(char *path) {
@@ -431,13 +430,13 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
         return -EEXIST;
     }
 
-    struct fs_inode* parent_inode = (struct fs_inode*) malloc(sizeof(struct fs_inode));
-    block_read(parent_inode, inum, 1);
-    if (!S_ISDIR(parent_inode->mode)) {
+    struct fs_inode parent_inode;
+    block_read(&parent_inode, inum, 1);
+    if (!S_ISDIR(parent_inode.mode)) {
         return -ENOTDIR;
     }
 
-    int no_free_dirent = find_free_dirent_num(parent_inode);
+    int no_free_dirent = find_free_dirent_num(&parent_inode);
     if(no_free_dirent < 0) {
         return -ENOSPC;
     }
@@ -460,8 +459,8 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     bit_set(bitmap, free_inum);
     update_bitmap();
 
-    memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs_inode));
-    update_inode(free_inum);
+    //memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs_inode));
+    update_inode(&new_inode,free_inum);
 
     // set parent_inode dirent then write it
     char *_path = strdup(path);
@@ -475,8 +474,8 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
     new_dirent.name[strlen(tmp_name)] = '\0';
 
-    struct fs_dirent *dir = (struct fs_dirent *)malloc(MAX_DIREN_NUM);
-    int blknum = (parent_inode->ptrs)[0];
+    struct fs_dirent *dir = (struct fs_dirent *)malloc(FS_BLOCK_SIZE);
+    int blknum = (parent_inode.ptrs)[0];
     block_read(dir, blknum, 1);
     memcpy(&dir[no_free_dirent], &new_dirent, sizeof(struct fs_dirent));
     block_write(dir, blknum, 1);
@@ -510,7 +509,7 @@ int fs_mkdir(const char *path, mode_t mode) {
     if (!truncate_path(path, &parent_path)) {
         return -1;
     }
-
+    printf("HM : %s, %s\n", path, parent_path);
     int inum_dir = translate(parent_path);
     if (inum_dir == -ENOENT || inum_dir == -ENOTDIR) {
         return inum_dir;
@@ -522,19 +521,16 @@ int fs_mkdir(const char *path, mode_t mode) {
         return -EEXIST;
     }
 
-    struct fs_inode* parent_inode = (struct fs_inode*) malloc(sizeof(struct fs_inode));
-    block_read(parent_inode, inum, 1);
-    if (!S_ISDIR(parent_inode->mode)) {
-        return -ENOTDIR;
-    }
+    struct fs_inode parent_inode;
+    block_read(&parent_inode, inum, 1);
 
-    int no_free_dirent = find_free_dirent_num(parent_inode);
+    int no_free_dirent = find_free_dirent_num(&parent_inode);
     if(no_free_dirent < 0) {
         return -ENOSPC;
     }
 
     //dir check
-    if (!S_ISDIR(parent_inode->mode)) {
+    if (!S_ISDIR(parent_inode.mode)) {
         return -ENOTDIR;
     }
     
@@ -570,8 +566,8 @@ int fs_mkdir(const char *path, mode_t mode) {
     bit_set(bitmap, free_inum);
     update_bitmap();
 
-    memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs_inode));
-    update_inode(free_inum);
+    //memcpy(&parent_inode.ptrs[free_inum], &new_inode, sizeof(struct fs_inode));
+    update_inode(&new_inode, free_inum);
 
     // set parent_inode dirent then write it
     char *_path = strdup(path);
@@ -585,14 +581,14 @@ int fs_mkdir(const char *path, mode_t mode) {
     memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
     new_dirent.name[strlen(tmp_name)] = '\0';
 
-    struct fs_dirent *dir = (struct fs_dirent *)malloc(MAX_DIREN_NUM);
-    int blknum = (parent_inode->ptrs)[0];
+    struct fs_dirent *dir = (struct fs_dirent *)malloc(FS_BLOCK_SIZE);
+    int blknum = parent_inode.ptrs[0];
     block_read(dir, blknum, 1);
     memcpy(&dir[no_free_dirent], &new_dirent, sizeof(struct fs_dirent));
     block_write(dir, blknum, 1);
 
-    free(free_block);
     free(dir);
+    free(free_block);
     free(_path);
     return 0;
 }
