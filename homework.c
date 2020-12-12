@@ -44,8 +44,6 @@ extern int block_write(void *buf, int lba, int nblks);
 struct fs_super superblock;
 unsigned char bitmap[FS_BLOCK_SIZE];
 
-struct fs_inode *inode_region; /* inodes in memory */
-
 /* function declaration */
 
 /* truncate the last token from path return 1 if succeed, 0 if not*/
@@ -401,6 +399,7 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     if (inum > 0) {
         return -EEXIST;
     }
+    
     struct fs_inode parent_inode;
     block_read(&parent_inode, inum_dir, 1);
     if (!S_ISDIR(parent_inode.mode)) {
@@ -574,8 +573,10 @@ int fs_unlink(const char *path) {
     if (inum == -ENOENT || inum == -ENOTDIR) {
         return inum;
     }
-    struct fs_inode *inode = &inode_region[inum];
-    if  (S_ISDIR(inode->mode)) {
+    struct fs_inode inode;
+    block_read(&inode, inum, 1);
+
+    if  (S_ISDIR(inode.mode)) {
         return -EISDIR;
     }
 
