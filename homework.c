@@ -9,6 +9,7 @@
 #define FUSE_USE_VERSION 27
 #define _FILE_OFFSET_BITS 64
 
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <fuse.h>
@@ -17,7 +18,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <assert.h>
 
 #include "fs5600.h"
 
@@ -50,7 +50,7 @@ unsigned char bitmap[FS_BLOCK_SIZE];
 int truncate_path(const char *path, char **truncated_path);
 
 /* translate: return the inode number of given path */
-static int translate(const char *path);
+static int translate(char *path);
 
 /* bitmap functions */
 void bit_set(unsigned char *map, int i) { map[i / 8] |= (1 << (i % 8)); }
@@ -96,7 +96,7 @@ void *fs_init(struct fuse_conn_info *conn) {
  *    free(_path);
  */
 
-static int parse_path(const char *path, char **pathv) {
+static int parse_path(char *path, char **pathv) {
     // char * token = strtok(path, "/");
     // int count = 0;
     // while (token != NULL) {
@@ -108,7 +108,7 @@ static int parse_path(const char *path, char **pathv) {
 
     int i;
     for (i = 0; i < MAX_PATH_LEN; i++) {
-        if ((pathv[i] = strtok((char*) path, "/")) == NULL) break;
+        if ((pathv[i] = strtok((char *)path, "/")) == NULL) break;
         if (strlen(pathv[i]) > MAX_NAME_LEN)
             pathv[i][MAX_NAME_LEN] = 0;  // truncate to 27 characters
         path = NULL;
@@ -116,7 +116,7 @@ static int parse_path(const char *path, char **pathv) {
     return i;
 }
 
-static int translate(const char *path) {
+static int translate(char *path) {
     char *pathv[10];
     int pathc = parse_path(path, pathv);
     int inum = 2;  // root inode
@@ -381,7 +381,6 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
  * entire block), you are free to return -ENOSPC instead of expanding it.
  */
 int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
-
     // check if parent dir exist
     char *parent_path;
     if (!truncate_path(path, &parent_path)) {
@@ -399,7 +398,7 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     if (inum > 0) {
         return -EEXIST;
     }
-    
+
     struct fs_inode parent_inode;
     block_read(&parent_inode, inum_dir, 1);
     if (!S_ISDIR(parent_inode.mode)) {
@@ -407,20 +406,20 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     }
 
     int no_free_dirent = find_free_dirent_num(&parent_inode);
-    if(no_free_dirent < 0) {
+    if (no_free_dirent < 0) {
         return -ENOSPC;
     }
 
     // set inode region bitmap
     time_t time_raw_format;
-    time( &time_raw_format );
+    time(&time_raw_format);
     struct fs_inode new_inode = {
-            .uid = getuid(),
-            .gid = getgid(),
-            .mode = mode,
-            .ctime = time_raw_format,
-            .mtime = time_raw_format,
-            .size = 0,
+        .uid = getuid(),
+        .gid = getgid(),
+        .mode = mode,
+        .ctime = time_raw_format,
+        .mtime = time_raw_format,
+        .size = 0,
     };
     int free_inum = find_free_inode_map_bit();
     if (free_inum < 0) {
@@ -429,16 +428,16 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     bit_set(bitmap, free_inum);
     update_bitmap();
 
-    //memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs_inode));
-    update_inode(&new_inode,free_inum);
+    // memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs_inode));
+    update_inode(&new_inode, free_inum);
 
     // set parent_inode dirent then write it
     char *_path = strdup(path);
     char *tmp_name = get_name(_path);
     struct fs_dirent new_dirent = {
-            .valid = 1,
-            .inode = free_inum,
-            .name = "",
+        .valid = 1,
+        .inode = free_inum,
+        .name = "",
     };
     assert(strlen(tmp_name) < MAX_NAME_LEN);
     memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
@@ -450,11 +449,9 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     memcpy(&dir[no_free_dirent], &new_dirent, sizeof(struct fs_dirent));
     block_write(dir, blknum, 1);
 
-
     free(dir);
     free(_path);
     return 0;
-
 }
 
 /* mkdir - create a directory with the given mode.
@@ -495,27 +492,25 @@ int fs_mkdir(const char *path, mode_t mode) {
     block_read(&parent_inode, inum_dir, 1);
 
     int no_free_dirent = find_free_dirent_num(&parent_inode);
-    if(no_free_dirent < 0) {
+    if (no_free_dirent < 0) {
         return -ENOSPC;
     }
 
-    //dir check
+    // dir check
     if (!S_ISDIR(parent_inode.mode)) {
         return -ENOTDIR;
     }
-    
+
     // set inode region bitmap
     time_t time_raw_format;
-    time( &time_raw_format );
-    struct fs_inode new_inode = {
-            .uid = getuid(),
-            .gid = getgid(),
-            .mode = mode,
-            .ctime = time_raw_format,
-            .mtime = time_raw_format,
-            .size = 0,
-            .ptrs = {0}
-    };
+    time(&time_raw_format);
+    struct fs_inode new_inode = {.uid = getuid(),
+                                 .gid = getgid(),
+                                 .mode = mode,
+                                 .ctime = time_raw_format,
+                                 .mtime = time_raw_format,
+                                 .size = 0,
+                                 .ptrs = {0}};
 
     int free_blk_num = find_free_block_number();
     if (free_blk_num < 0) {
@@ -536,16 +531,17 @@ int fs_mkdir(const char *path, mode_t mode) {
     bit_set(bitmap, free_inum);
     update_bitmap();
 
-    //memcpy(&parent_inode.ptrs[free_inum], &new_inode, sizeof(struct fs_inode));
+    // memcpy(&parent_inode.ptrs[free_inum], &new_inode, sizeof(struct
+    // fs_inode));
     update_inode(&new_inode, free_inum);
 
     // set parent_inode dirent then write it
     char *_path = strdup(path);
     char *tmp_name = get_name(_path);
     struct fs_dirent new_dirent = {
-            .valid = 1,
-            .inode = free_inum,
-            .name = "",
+        .valid = 1,
+        .inode = free_inum,
+        .name = "",
     };
     assert(strlen(tmp_name) < MAX_NAME_LEN);
     memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
@@ -576,7 +572,7 @@ int fs_unlink(const char *path) {
     struct fs_inode inode;
     block_read(&inode, inum, 1);
 
-    if  (S_ISDIR(inode.mode)) {
+    if (S_ISDIR(inode.mode)) {
         return -EISDIR;
     }
 
@@ -591,7 +587,7 @@ int fs_unlink(const char *path) {
     int parent_inum = translate(parent_path);
     free(parent_path);
 
-    struct fs_inode* _in = (struct fs_inode*) malloc(sizeof(struct fs_inode));
+    struct fs_inode *_in = (struct fs_inode *)malloc(sizeof(struct fs_inode));
     block_read(_in, parent_inum, 1);
     if (!S_ISDIR(_in->mode)) {
         return -ENOTDIR;
@@ -641,12 +637,12 @@ int fs_rmdir(const char *path) {
     // remove entry from parent dir
     char *_path = strdup(path);
     if (_path[strlen(_path) - 1] == '/') {
-		_path[strlen(_path) - 1] = '\0';
-	}
+        _path[strlen(_path) - 1] = '\0';
+    }
     char *name = get_name(_path);
     free(parent_path);
 
-    struct fs_inode* _in = (struct fs_inode*) malloc(sizeof(struct fs_inode));
+    struct fs_inode *_in = (struct fs_inode *)malloc(sizeof(struct fs_inode));
     block_read(_in, parent_inum, 1);
     if (!S_ISDIR(_in->mode)) {
         free(_in);
@@ -767,7 +763,7 @@ int fs_utime(const char *path, struct utimbuf *ut) {
     /* your code here */
     int inum = translate(path);
     if (inum < 0) {
-    	return inum;
+        return inum;
     }
     struct fs_inode _in;
     block_read(&_in, inum, 1);
@@ -776,7 +772,6 @@ int fs_utime(const char *path, struct utimbuf *ut) {
     //_in.ctime = ut->actime; not sure
     block_write(&_in, inum, 1);
     return 0;
-
 }
 
 /* truncate - truncate file to exactly 'len' bytes
@@ -798,11 +793,11 @@ int fs_truncate(const char *path, off_t len) {
     struct fs_inode _in;
     block_read(&_in, inum, 1);
 
-    if  (S_ISDIR(_in.mode)) {
+    if (S_ISDIR(_in.mode)) {
         return -EISDIR;
     }
 
-    printf("TBD\n"); // TBD update/clear block bit map & inodes
+    printf("TBD\n");  // TBD update/clear block bit map & inodes
 
     return -EOPNOTSUPP;
 }
@@ -859,6 +854,25 @@ int fs_read(const char *path, char *buf, size_t len, off_t offset,
     return byte_read;
 }
 
+// len_towrite can be larger than blocksize. len_written will be updated with
+// byte written to disk.
+void fs_write_block(int bck_inum, int bck_start, const char *curr_buf,
+                    int len_towrite, int *len_written) {
+    char modified_bck[FS_BLOCK_SIZE];
+    if (bck_start != 0 || len_towrite < FS_BLOCK_SIZE) {
+        // read block from disk
+        block_read(modified_bck, bck_inum, 1);
+    }
+    int actual_len = len_towrite + bck_start > FS_BLOCK_SIZE
+                         ? FS_BLOCK_SIZE - bck_start
+                         : len_towrite;
+    
+    memcpy(modified_bck + bck_start, curr_buf, actual_len);
+    *len_written = actual_len;
+
+    block_write(modified_bck, bck_inum, 1);
+}
+
 /* write - write data to a file
  * success - return number of bytes written. (this will be the same as
  *           the number requested, or else it's an error)
@@ -870,49 +884,66 @@ int fs_read(const char *path, char *buf, size_t len, off_t offset,
 int fs_write(const char *path, const char *buf, size_t len, off_t offset,
              struct fuse_file_info *fi) {
     /* your code here */
-    int byte_write = 0;
+    int total_len_writen = 0;
     char *_path = strdup(path);
     int inum = translate(_path);
-    if (inum == ENOENT || inum == ENOTDIR) return inum;
+    if (inum == -ENOENT || inum == -ENOTDIR) {
+        printf("path translation error.\n");
+        return inum;
+    }
     struct fs_inode _in;
     block_read(&_in, inum, 1);
     // inode isn't a file return EISDIR
-    if (!S_ISREG(_in.mode)) return EISDIR;
+    printf("Inum: %d\n", inum);
+    if (!S_ISREG(_in.mode)) {
+        printf("mode: %o", _in.mode);
+        printf("It isn't a file.\n");
+        return EISDIR;
+    }
 
     int file_len = _in.size;
-    if (offset >= file_len) return byte_write;
+    // if 'offset' is greater than current file length.
+    if (offset > file_len) return EINVAL;
 
-    int end = (offset + len >= file_len ? file_len : offset + len) - 1;
-    int curr_ptr = offset;
-    int buf_ptr = 0;
+    int len_towrite = len;
+    const char *curr_buf = buf;
+    off_t curr_offset = offset;
+    int blck_allocated = (file_len + FS_BLOCK_SIZE - 1) / FS_BLOCK_SIZE;
+    while (len_towrite > 0) {
+        int len_written = 0;
 
-    for (int i = 0; curr_ptr <= end; i++) {
-        // offset is smaller than current block ends, start writing.
-        if (((i + 1) * FS_BLOCK_SIZE) > offset) {
-            int lba = _in.ptrs[i];
-            char tmp[FS_BLOCK_SIZE];
+        int bck_idx = curr_offset / FS_BLOCK_SIZE;
+        int bck_inum;
+        int bck_start = 0;
+        if (blck_allocated < bck_idx + 1) {
+            // find new block to write on
+            bck_inum = find_free_inode_map_bit();
+            bit_set(bitmap, bck_inum);
+            update_bitmap();
+            _in.ptrs[bck_idx] = bck_inum;
 
-            int blck_write_start = 0;
-            // offset is larger than current block start, shift blck start to
-            // offset position.
-            if (offset > i * FS_BLOCK_SIZE)
-                blck_write_start = offset - i * FS_BLOCK_SIZE;
-            int blck_ptr = blck_write_start;
-            // copy until end of read or end of block.
-            while (curr_ptr <= end && blck_ptr < FS_BLOCK_SIZE) {
-                // printf("in fs_write: curr blck #: %d, char: %c\n buffer:
-                // %s\n", i, tmp[blck_ptr], buf);
-                tmp[blck_ptr++] = buf[buf_ptr++];
-                curr_ptr++;
-            }
-            if (curr_ptr > end) break;
-
-            block_write(tmp, lba, 1);
-
+            bck_start = 0;
+        } else {
+            // TODO: may be wrong here
+            bck_start = curr_offset - bck_idx * FS_BLOCK_SIZE;
+            bck_inum = _in.ptrs[bck_idx];
         }
+
+        fs_write_block(bck_inum, bck_start, curr_buf, len_towrite,
+                       &len_written);
+
+        len_towrite -= len_written;
+        curr_buf += len_written;
+        curr_offset += len_written;
+        total_len_writen += len_written;
     }
-    byte_write = curr_ptr - offset;
-    return byte_write;
+
+    // write the updated len back to inode.
+    if (file_len < offset + len) {
+        _in.size = offset + len;
+        block_write(&_in, inum, 1);
+    }
+    return total_len_writen;
 }
 
 /* statfs - get file system statistics
