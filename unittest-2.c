@@ -357,9 +357,9 @@ START_TEST(fsmkdir_error_test) {
     // too-long name (more than 27 characters)  either return -EINVAL or
     // truncate the name.
 
-    expected = -EINVAL;
+    expected = 0;
     printf(
-        "too-long name (more than 27 characters) (should return %d or truncate "
+        "too-long name (more than 27 characters) (should return %d and truncate "
         "the name)\n",
         expected);
     actual = fs_ops.mkdir(
@@ -598,7 +598,7 @@ int main(int argc, char **argv) {
 
     SRunner *sr = srunner_create(s);
 
-    setupTestcase(s, "fs_mkdir_test", fs_mkdir_test);
+    // setupTestcase(s, "fs_mkdir_test", fs_mkdir_test);
     // setupTestcase(s, "rmdir single test", fs_rmdir_test);
     // setupTestcase(s, "create test", fs_create_test);
     // setupTestcase(s, "fs_unlink_test", fs_unlink_test);
@@ -606,7 +606,7 @@ int main(int argc, char **argv) {
 
     // setupTestcase(s, "fs_rmdir_error_test", fs_rmdir_error_test);
     // setupTestcase(s, "fs_unlink_error_test", fs_unlink_error_test);
-    // setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
+    setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
     // setupTestcase(s, "fsmknod_error_test", fsmknod_error_test);
     // setupTestcase(s, "fswrite_append_test", fswrite_append_test);
     // setupTestcase(s, "fswrite_test", fswrite_test);
