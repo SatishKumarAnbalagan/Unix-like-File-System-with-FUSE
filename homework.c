@@ -481,19 +481,17 @@ int fs_mkdir(const char *path, mode_t mode) {
         return -EINVAL;
     }
 
-    // check if parent dir exist
-    char *parent_path;
-    if (!truncate_path(path, &parent_path)) {
-        return -1;
-    }
+    char *duppath = strdup(path);
+    char *pathv[MAX_PATH_LEN];
+    int pathc = parse_path(duppath, pathv);
+    int inum_dir = translate_pathv(pathv, pathc - 1);
 
-    int inum_dir = translate(parent_path);
     if (inum_dir == -ENOENT || inum_dir == -ENOTDIR) {
         return inum_dir;
     }
 
     // check if file exists
-    int inum = translate(path);
+    int inum = translate_pathv(pathv, pathc);
     if (inum > 0) {
         return -EEXIST;
     }

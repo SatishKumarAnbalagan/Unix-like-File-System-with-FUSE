@@ -119,20 +119,23 @@ START_TEST(fs_mkdir_single_test) {
 }
 END_TEST
 
-readdirtest_t mkdir_table[] = {{"/dir3/mkdir1", 0},
-                               {"/dir3/mkdir2", 0},
-                               {"/dir3/mkdir3", 0},
-                               {"/dir3/mkdir4", 0},
+readdirtest_t mkdir_table[] = {{"mkdir1", 0},
+                               {"mkdir2", 0},
+                               {"mkdir3", 0},
+                               {"mkdir4", 0},
                                {NULL}};
 
 START_TEST(fs_mkdir_test) {
     printf("fs_mkdir_test\n\n");
 
-    const char *parentdir = "/dir3";
+    const char *parentdir = "/dir3/";
     mode_t mode = 0777;
     printf("\n Parent dir: %s\n", parentdir);
     for (int i = 0; mkdir_table[i].childpath != NULL; i++) {
-        int mkdir_status = fs_ops.mkdir(mkdir_table[i].childpath, mode);
+
+        char combined_path[100];
+        sprintf(combined_path, "%s%s", parentdir, mkdir_table[i].childpath);
+        int mkdir_status = fs_ops.mkdir(combined_path, mode);
         printf("mkdir: %s, status is %d\n", mkdir_table[i].childpath,
                mkdir_status);
         ck_assert_int_eq(mkdir_status, 0);
@@ -595,9 +598,9 @@ int main(int argc, char **argv) {
 
     SRunner *sr = srunner_create(s);
 
-    // setupTestcase(s, "fs_mkdir_test", fs_mkdir_test);
+    setupTestcase(s, "fs_mkdir_test", fs_mkdir_test);
     // setupTestcase(s, "rmdir single test", fs_rmdir_test);
-    setupTestcase(s, "create test", fs_create_test);
+    // setupTestcase(s, "create test", fs_create_test);
     // setupTestcase(s, "fs_unlink_test", fs_unlink_test);
     // setupTestcase(s, "fs_mkdir_single_test", fs_mkdir_single_test);
 
