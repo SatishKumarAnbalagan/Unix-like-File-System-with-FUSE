@@ -71,7 +71,6 @@ attr_t attr_table[] = {
     {"/file.8k+", 500, 500, 0100666, 8195, 1565283152, 1565283167, 3},
     {NULL}};
 
-
 /* this is an example of a callback function for readdir
  */
 int empty_filler(void *ptr, const char *name, const struct stat *stbuf,
@@ -455,7 +454,10 @@ void gen_buff(char *buf, int len) {
 void verify_write(char *path, int len, int offset, unsigned expect_cksum) {
     char *read_buf = malloc(sizeof(char) * len);
     int byte_read = fs_ops.read(path, read_buf, len, offset, NULL);
-    printf("Test by reading, Actual byte read len: %u", byte_read);
+    printf(
+        "Test by reading, offset: %d, Expected read len: %d, Actual byte read "
+        "len: %d\n",
+        offset, len, byte_read);
 
     ck_assert_int_eq(len, byte_read);
     unsigned read_cksum = crc32(0, (unsigned char *)read_buf, len);
@@ -467,14 +469,14 @@ void verify_write(char *path, int len, int offset, unsigned expect_cksum) {
 }
 
 /* change test name and make it do something useful */
-START_TEST(a_test) {
-    char *path = "/file.10";
+START_TEST(write_smallfile_test) {
+    char path[] = "/file.10";
     int len = 4000;
     char *write_buf = malloc(len);
     gen_buff(write_buf, len);
     unsigned write_cksum = crc32(0, (unsigned char *)write_buf, len);
-    printf("Path to write: %s \t size to write: %d \t cksum: %u \n", path,
-           len, write_cksum);
+    printf("Path to write: %s \t size to write: %d \t expected cksum: %u \n",
+           path, len, write_cksum);
     int byte_written = fs_ops.write(path, write_buf, len, 0,
                                     NULL);  // 4000 bytes, offset=0
     printf("Byte writte: %d\n", byte_written);
@@ -484,12 +486,11 @@ START_TEST(a_test) {
     // Test by reading the written file.
     verify_write(path, len, 0, write_cksum);
     free(write_buf);
-
 }
 END_TEST
 
 START_TEST(fswrite_test) {
-    char *path[] = {"/file.10", NULL};
+    char *path[] = {"/file.1k", NULL};
     int lens[] = {4000};
     for (int i = 0; path[i] != NULL; i++) {
         int len = lens[i];
@@ -580,13 +581,14 @@ void setupTestcase(Suite *s, const char *str, void (*f)(int)) {
 }
 
 int main(int argc, char **argv) {
-    block_init("test2.img");
+    // Use part 1 test image instead of empty image
+    block_init("test.img");
     fs_ops.init(NULL);
 
     Suite *s = suite_create("fs5600");
-    TCase *tc = tcase_create("write_mostly");
+    TCase *tc = tcase_create("write_smallfile_test");
 
-    tcase_add_test(tc, a_test); /* see START_TEST above */
+    tcase_add_test(tc, write_smallfile_test); /* see START_TEST above */
     /* add more tests here */
 
     suite_add_tcase(s, tc);
@@ -603,7 +605,7 @@ int main(int argc, char **argv) {
     // setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
     // setupTestcase(s, "fsmknod_error_test", fsmknod_error_test);
     // setupTestcase(s, "fswrite_append_test", fswrite_append_test);
-    // setupTestcase(s, "fswrite_test", fswrite_test);
+    setupTestcase(s, "fswrite_test", fswrite_test);
     srunner_set_fork_status(sr, CK_NOFORK);
 
     srunner_run_all(sr, CK_VERBOSE);
