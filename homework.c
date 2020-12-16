@@ -570,7 +570,9 @@ int fs_mkdir(const char *path, mode_t mode) {
  */
 int fs_unlink(const char *path) {
     /* your code here */
-    int inum = translate(path);
+    char *duppath = strdup(path);
+    int inum = translate(duppath);
+    free(duppath);
     if (inum == -ENOENT || inum == -ENOTDIR) {
         return inum;
     }
@@ -587,35 +589,37 @@ int fs_unlink(const char *path) {
         return truncate_result;
     }
 
-    char *parent_path;
-    truncate_path(path, &parent_path);
-    int parent_inum = translate(parent_path);
-    free(parent_path);
-
-    struct fs_inode *_in = (struct fs_inode *)malloc(sizeof(struct fs_inode));
-    block_read(_in, parent_inum, 1);
-    if (!S_ISDIR(_in->mode)) {
-        return -ENOTDIR;
-    }
-    int blknum = _in->ptrs[0];
-
     // clear inode_map corresponding bit
     bit_clear(bitmap, inum);
     update_bitmap();
 
     // remove entry from father dir
+
+    char *parent_path;
+    truncate_path(path, &parent_path);
+    int parent_inum = translate(parent_path);
+
+    struct fs_inode parent_inode;
+    block_read(&parent_inode, parent_inum, 1);
+    if (!S_ISDIR(parent_inode.mode)) {
+        return -ENOTDIR;
+    }
+    int blknum = parent_inode.ptrs[0];
+
     char *_path = strdup(path);
     char *name = get_name(_path);
-
-    struct fs_dirent *_dir = malloc(FS_BLOCK_SIZE);
-    block_read(_dir, blknum, 1);
-    int found = exists_in_directory(_dir, name);
-    block_write(_dir, blknum, 1);
+    printf("nameis %s\n", name);
+    struct fs_dirent dir[MAX_DIREN_NUM];
+    block_read(dir, blknum, 1);
+    int found = exists_in_directory(dir, name);
     if (!found) {
         return -ENOENT;
     }
+    struct fs_dirent empty_entry = {.inode = 0, .name = 0, .valid = 0};
+    dir[found] = empty_entry;
 
-    free(_dir);
+    block_write(dir, blknum, 1);
+
     free(_path);
     return 0;
 }
@@ -791,7 +795,7 @@ int fs_truncate(const char *path, off_t len) {
     if (len != 0) return -EINVAL; /* invalid argument */
 
     /* your code here */
-    char * _path = strdup(path);
+    char *_path = strdup(path);
     int inum = translate(_path);
     free(_path);
     if (inum == -ENOENT || inum == -ENOTDIR) {
@@ -811,8 +815,10 @@ int fs_truncate(const char *path, off_t len) {
         char zeros[FS_BLOCK_SIZE];
         memset(zeros, 0, FS_BLOCK_SIZE);
         block_write(zeros, bck_num, 1);
-
-        bit_clear(bitmap, bck_num);
+        if (i != 0) {
+            bit_clear(bitmap, bck_num);
+            _in.ptrs[i] = 0;
+        }
     }
 
     _in.size = len;

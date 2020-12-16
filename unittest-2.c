@@ -242,13 +242,16 @@ START_TEST(fs_unlink_test) {
     printf("fs_unlink_test\n\n");
 
     fscreate_test();
-    const char *parentdir = "/dir3";
+    const char *parentdir = "/dir3/";
     printf("\n Parent dir: %s\n", parentdir);
     for (int i = 0; fscreate_table[i].childpath != NULL; i++) {
-        int mkdir_status = fs_ops.unlink(fscreate_table[i].childpath);
-        printf("remove node: %s, status is %d\n", fscreate_table[i].childpath,
-               mkdir_status);
-        ck_assert_int_eq(mkdir_status, 0);
+                char combined_path[100];
+        sprintf(combined_path, "%s%s", parentdir, fscreate_table[i].childpath);
+
+        int unlink_status = fs_ops.unlink(combined_path);
+        printf("remove node: %s, status is %d\n", combined_path,
+               unlink_status);
+        ck_assert_int_eq(unlink_status, 0);
     }
 
     for (int j = 0; fscreate_table[j].childpath != NULL; j++) {
@@ -259,10 +262,11 @@ START_TEST(fs_unlink_test) {
             fs_ops.readdir(parentdir, &fscreate_table[j], test_filler, 0, NULL);
         ck_assert_int_eq(read_status, 0);
         if (fscreate_table[j].found != 0) {
-            printf("new directory found. unlink error\n");
+            printf("created node found. unlink error\n");
             ck_abort();
         }
     }
+    printf("All created node were removed.\n");
 }
 END_TEST
 
@@ -601,12 +605,12 @@ int main(int argc, char **argv) {
     // setupTestcase(s, "fs_mkdir_test", fs_mkdir_test);
     // setupTestcase(s, "rmdir single test", fs_rmdir_test);
     // setupTestcase(s, "create test", fs_create_test);
-    // setupTestcase(s, "fs_unlink_test", fs_unlink_test);
+    setupTestcase(s, "fs_unlink_test", fs_unlink_test);
     // setupTestcase(s, "fs_mkdir_single_test", fs_mkdir_single_test);
 
     // setupTestcase(s, "fs_rmdir_error_test", fs_rmdir_error_test);
     // setupTestcase(s, "fs_unlink_error_test", fs_unlink_error_test);
-    setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
+    // setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
     // setupTestcase(s, "fsmknod_error_test", fsmknod_error_test);
     // setupTestcase(s, "fswrite_append_test", fswrite_append_test);
     // setupTestcase(s, "fswrite_test", fswrite_test);
