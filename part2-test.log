@@ -1,0 +1,24 @@
+***** nothing implemented
+
+Running suite(s): fs5600
+0%: Checks: 19, Failures: 19, Errors: 0
+gradetest-2.c:66:F:write_mostly:mkdir_1:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:160:F:write_mostly:mkdir_2:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:198:F:write_mostly:create_1:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:242:F:write_mostly:create_2:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:278:F:write_mostly:create_3:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:317:F:write_mostly:mkdir_fail:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:408:F:write_mostly:create_fail:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:499:F:write_mostly:unlink_fail:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:548:F:write_mostly:rmdir_fail:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:647:F:write_mostly:write_4091:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:647:F:write_mostly:write_4096:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:647:F:write_mostly:write_4200:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:647:F:write_mostly:write_8190:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:647:F:write_mostly:write_12300:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:713:F:write_mostly:overwrite_1:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:713:F:write_mostly:overwrite_2:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:713:F:write_mostly:overwrite_3:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:770:F:write_mostly:cross_eof:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+gradetest-2.c:805:F:write_mostly:truncate_test:0: Assertion 'rv == 0' failed: rv == -95, 0 == 0
+19 tests failed
