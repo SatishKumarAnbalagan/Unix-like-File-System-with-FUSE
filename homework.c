@@ -791,7 +791,9 @@ int fs_truncate(const char *path, off_t len) {
     if (len != 0) return -EINVAL; /* invalid argument */
 
     /* your code here */
-    int inum = translate(path);
+    char * _path = strdup(path);
+    int inum = translate(_path);
+    free(_path);
     if (inum == -ENOENT || inum == -ENOTDIR) {
         return inum;
     }
@@ -802,9 +804,21 @@ int fs_truncate(const char *path, off_t len) {
         return -EISDIR;
     }
 
-    printf("TBD\n");  // TBD update/clear block bit map & inodes
+    int blck_allocated = (_in.size + FS_BLOCK_SIZE - 1) / FS_BLOCK_SIZE;
 
-    return -EOPNOTSUPP;
+    for (int i = 0; i < blck_allocated; i++) {
+        int bck_num = _in.ptrs[i];
+        char zeros[FS_BLOCK_SIZE];
+        memset(zeros, 0, FS_BLOCK_SIZE);
+        block_write(zeros, bck_num, 1);
+
+        bit_clear(bitmap, bck_num);
+    }
+
+    _in.size = len;
+    block_write(&_in, inum, 1);
+    update_bitmap();
+    return 0;
 }
 
 /* read - read data from an open file.
