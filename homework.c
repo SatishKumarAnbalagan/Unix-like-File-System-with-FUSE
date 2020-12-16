@@ -116,9 +116,7 @@ static int parse_path(char *path, char **pathv) {
     return i;
 }
 
-static int translate(char *path) {
-    char *pathv[10];
-    int pathc = parse_path(path, pathv);
+static int translate_pathv(char *pathv[], int pathc) {
     int inum = 2;  // root inode
     for (int i = 0; i < pathc; i++) {
         struct fs_inode _in;
@@ -131,15 +129,25 @@ static int translate(char *path) {
         block_read(des, blknum, 1);
         int entry_found = 0;
         for (int j = 0; j < MAX_DIREN_NUM; j++) {
+            // if (des[j].valid) {
+            //     printf("des entry: %s\n", des[j].name);
+            // }
             if (des[j].valid && strcmp(des[j].name, pathv[i]) == 0) {
                 inum = des[j].inode;
                 entry_found = 1;
                 break;
             }
         }
+
         if (!entry_found) return -ENOENT;
     }
     return inum;
+}
+
+static int translate(char *path) {
+    char *pathv[10];
+    int pathc = parse_path(path, pathv);
+    translate_pathv(pathv, pathc);
 }
 
 static int find_enclosing(char *path) {
@@ -382,19 +390,19 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
  */
 int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     // check if parent dir exist
-    char *parent_path;
-    if (!truncate_path(path, &parent_path)) {
-        // path is "/"
-        return -1;
-    }
 
-    int inum_dir = translate(parent_path);
+    char *duppath = strdup(path);
+    char *pathv[MAX_PATH_LEN];
+    int pathc = parse_path(duppath, pathv);
+
+    int inum_dir = translate_pathv(pathv, pathc - 1);
+
     if (inum_dir == -ENOENT || inum_dir == -ENOTDIR) {
         return inum_dir;
     }
 
     // check if file exists
-    int inum = translate(path);
+    int inum = translate_pathv(pathv, pathc);
     if (inum > 0) {
         return -EEXIST;
     }
@@ -432,25 +440,27 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     update_inode(&new_inode, free_inum);
 
     // set parent_inode dirent then write it
-    char *_path = strdup(path);
-    char *tmp_name = get_name(_path);
+
+    char * tmp_name = pathv[pathc-1];
     struct fs_dirent new_dirent = {
         .valid = 1,
         .inode = free_inum,
         .name = "",
     };
-    assert(strlen(tmp_name) < MAX_NAME_LEN);
+    printf("name :%s", tmp_name);
+    // assert(strlen(tmp_name) < MAX_NAME_LEN);
     memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
     new_dirent.name[strlen(tmp_name)] = '\0';
 
-    struct fs_dirent *dir = (struct fs_dirent *)malloc(FS_BLOCK_SIZE);
+
+    struct fs_dirent dir[MAX_DIREN_NUM];
     int blknum = (parent_inode.ptrs)[0];
     block_read(dir, blknum, 1);
     memcpy(&dir[no_free_dirent], &new_dirent, sizeof(struct fs_dirent));
     block_write(dir, blknum, 1);
 
-    free(dir);
-    free(_path);
+    free(duppath);
+
     return 0;
 }
 
@@ -866,7 +876,7 @@ void fs_write_block(int bck_inum, int bck_start, const char *curr_buf,
     int actual_len = len_towrite + bck_start > FS_BLOCK_SIZE
                          ? FS_BLOCK_SIZE - bck_start
                          : len_towrite;
-    
+
     memcpy(modified_bck + bck_start, curr_buf, actual_len);
     *len_written = actual_len;
 
