@@ -71,9 +71,6 @@ attr_t attr_table[] = {
     {"/file.8k+", 500, 500, 0100666, 8195, 1565283152, 1565283167, 3},
     {NULL}};
 
-/* change test name and make it do something useful */
-START_TEST(a_test) { ck_assert_int_eq(1, 1); }
-END_TEST
 
 /* this is an example of a callback function for readdir
  */
@@ -462,14 +459,37 @@ void verify_write(char *path, int len, int offset, unsigned expect_cksum) {
 
     ck_assert_int_eq(len, byte_read);
     unsigned read_cksum = crc32(0, (unsigned char *)read_buf, len);
-    printf("Expected cksum %u \t Read checksum is %u \n", expect_cksum, read_cksum);
+    printf("Expected cksum %u \t Read checksum is %u \n", expect_cksum,
+           read_cksum);
 
     ck_assert_int_eq(expect_cksum, read_cksum);
     free(read_buf);
 }
 
+/* change test name and make it do something useful */
+START_TEST(a_test) {
+    char *path = "/file.10";
+    int len = 4000;
+    char *write_buf = malloc(len);
+    gen_buff(write_buf, len);
+    unsigned write_cksum = crc32(0, (unsigned char *)write_buf, len);
+    printf("Path to write: %s \t size to write: %d \t cksum: %u \n", path,
+           len, write_cksum);
+    int byte_written = fs_ops.write(path, write_buf, len, 0,
+                                    NULL);  // 4000 bytes, offset=0
+    printf("Byte writte: %d\n", byte_written);
+
+    ck_assert_int_eq(byte_written, len);
+
+    // Test by reading the written file.
+    verify_write(path, len, 0, write_cksum);
+    free(write_buf);
+
+}
+END_TEST
+
 START_TEST(fswrite_test) {
-    char *path[] = {"/testwrite.text", NULL};
+    char *path[] = {"/file.10", NULL};
     int lens[] = {4000};
     for (int i = 0; path[i] != NULL; i++) {
         int len = lens[i];
@@ -480,7 +500,7 @@ START_TEST(fswrite_test) {
                path[i], len, write_cksum);
         int byte_written = fs_ops.write(path[i], write_buf, len, 0,
                                         NULL);  // 4000 bytes, offset=0
-        printf("Byte writte: %d", byte_written);
+        printf("Byte writte: %d\n", byte_written);
 
         ck_assert_int_eq(byte_written, len);
 
@@ -572,18 +592,18 @@ int main(int argc, char **argv) {
     suite_add_tcase(s, tc);
     SRunner *sr = srunner_create(s);
 
-    setupTestcase(s, "fs_mkdir_test", fs_mkdir_test);
-    setupTestcase(s, "rmdir single test", fs_rmdir_test);
-    setupTestcase(s, "create test", fs_create_test);
-    setupTestcase(s, "fs_unlink_test", fs_unlink_test);
-    setupTestcase(s, "fs_mkdir_single_test", fs_mkdir_single_test);
+    // setupTestcase(s, "fs_mkdir_test", fs_mkdir_test);
+    // setupTestcase(s, "rmdir single test", fs_rmdir_test);
+    // setupTestcase(s, "create test", fs_create_test);
+    // setupTestcase(s, "fs_unlink_test", fs_unlink_test);
+    // setupTestcase(s, "fs_mkdir_single_test", fs_mkdir_single_test);
 
-    setupTestcase(s, "fs_rmdir_error_test", fs_rmdir_error_test);
-    setupTestcase(s, "fs_unlink_error_test", fs_unlink_error_test);
-    setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
-    setupTestcase(s, "fsmknod_error_test", fsmknod_error_test);
-    setupTestcase(s, "fswrite_append_test", fswrite_append_test);
-    setupTestcase(s, "fswrite_test", fswrite_test);
+    // setupTestcase(s, "fs_rmdir_error_test", fs_rmdir_error_test);
+    // setupTestcase(s, "fs_unlink_error_test", fs_unlink_error_test);
+    // setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
+    // setupTestcase(s, "fsmknod_error_test", fsmknod_error_test);
+    // setupTestcase(s, "fswrite_append_test", fswrite_append_test);
+    // setupTestcase(s, "fswrite_test", fswrite_test);
     srunner_set_fork_status(sr, CK_NOFORK);
 
     srunner_run_all(sr, CK_VERBOSE);
