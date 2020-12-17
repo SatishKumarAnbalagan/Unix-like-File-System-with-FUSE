@@ -243,13 +243,9 @@ int find_free_inode_map_bit() {
     return -ENOSPC;
 }
 
-void update_bitmap() {
-    block_write(&bitmap, 1, 1);
-}
+void update_bitmap() { block_write(&bitmap, 1, 1); }
 
-void update_inode(struct fs_inode *_in, int inum) {
-    block_write(_in, inum, 1);
-}
+void update_inode(struct fs_inode *_in, int inum) { block_write(_in, inum, 1); }
 
 static char *get_name(char *path) {
     int i = strlen(path) - 1;
@@ -647,10 +643,11 @@ int fs_rmdir(const char *path) {
             return -ENOTEMPTY;
         }
     }
-    
+
     char *parent_path;
     int truncate_result = truncate_path(path, &parent_path);
-    // Linux will never generate call to remove root directory. no need to handle error.
+    // Linux will never generate call to remove root directory. no need to
+    // handle error.
     if (!truncate_result) {
         // printf("ERROR: Deleting the root directory\n");
         return truncate_result;
@@ -777,7 +774,7 @@ int fs_chmod(const char *path, mode_t mode) {
 
 int fs_utime(const char *path, struct utimbuf *ut) {
     /* your code here */
-    char * _path = strdup(path);
+    char *_path = strdup(path);
     int inum = translate(_path);
     free(_path);
     if (inum < 0) {
@@ -849,11 +846,11 @@ int fs_read(const char *path, char *buf, size_t len, off_t offset,
     int byte_read = 0;
     char *_path = strdup(path);
     int inum = translate(_path);
-    if (inum == ENOENT || inum == ENOTDIR) return inum;
+    if (inum == -ENOENT || inum == -ENOTDIR) return inum;
     struct fs_inode _in;
     block_read(&_in, inum, 1);
     // inode isn't a file return EISDIR
-    if (!S_ISREG(_in.mode)) return EISDIR;
+    if (!S_ISREG(_in.mode)) return -EISDIR;
 
     int file_len = _in.size;
     if (offset >= file_len) return byte_read;
