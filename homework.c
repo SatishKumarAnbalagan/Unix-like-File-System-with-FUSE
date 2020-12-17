@@ -57,6 +57,9 @@ void bit_set(unsigned char *map, int i) { map[i / 8] |= (1 << (i % 8)); }
 void bit_clear(unsigned char *map, int i) { map[i / 8] &= ~(1 << (i % 8)); }
 int bit_test(unsigned char *map, int i) { return map[i / 8] & (1 << (i % 8)); }
 
+/* function prototype fs_truncate will be used in fs_unlink*/
+int fs_truncate(const char *path, off_t len);
+
 /* init - this is called once by the FUSE framework at startup. Ignore
  * the 'conn' argument.
  * recommended actions:
@@ -147,7 +150,7 @@ static int translate_pathv(char *pathv[], int pathc) {
 static int translate(char *path) {
     char *pathv[10];
     int pathc = parse_path(path, pathv);
-    translate_pathv(pathv, pathc);
+    return translate_pathv(pathv, pathc);
 }
 
 static int find_enclosing(char *path) {
@@ -216,7 +219,6 @@ static void set_attr(struct fs_inode inode, struct stat *sb) {
 }
 
 int find_free_dirent_num(struct fs_inode *inode) {
-    printf("find_free_dirent_num\n");
     struct fs_dirent dir[MAX_DIREN_NUM];
     int blknum = inode->ptrs[0];
     block_read(dir, blknum, 1);
@@ -232,7 +234,6 @@ int find_free_dirent_num(struct fs_inode *inode) {
 }
 
 int find_free_inode_map_bit() {
-    printf("find_free_inode_map_bit\n");
     int inode_capacity = FS_BLOCK_SIZE * 8;
     for (int i = 2; i < inode_capacity; i++) {
         if (!bit_test(bitmap, i)) {
@@ -243,12 +244,10 @@ int find_free_inode_map_bit() {
 }
 
 void update_bitmap() {
-    printf("update_bitmap\n");
     block_write(&bitmap, 1, 1);
 }
 
 void update_inode(struct fs_inode *_in, int inum) {
-    printf("update_inode\n");
     block_write(_in, inum, 1);
 }
 
@@ -447,7 +446,6 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
         .inode = free_inum,
         .name = "",
     };
-    printf("name :%s", tmp_name);
     // assert(strlen(tmp_name) < MAX_NAME_LEN);
     memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
     new_dirent.name[strlen(tmp_name)] = '\0';
@@ -608,14 +606,13 @@ int fs_unlink(const char *path) {
 
     char *_path = strdup(path);
     char *name = get_name(_path);
-    printf("nameis %s\n", name);
     struct fs_dirent dir[MAX_DIREN_NUM];
     block_read(dir, blknum, 1);
     int found = exists_in_directory(dir, name);
     if (!found) {
         return -ENOENT;
     }
-    struct fs_dirent empty_entry = {.inode = 0, .name = 0, .valid = 0};
+    struct fs_dirent empty_entry = {0};
     dir[found] = empty_entry;
 
     block_write(dir, blknum, 1);
@@ -653,8 +650,9 @@ int fs_rmdir(const char *path) {
     
     char *parent_path;
     int truncate_result = truncate_path(path, &parent_path);
+    // Linux will never generate call to remove root directory. no need to handle error.
     if (!truncate_result) {
-        printf("ERROR: Deleting the root directory\n");
+        // printf("ERROR: Deleting the root directory\n");
         return truncate_result;
     }
 
@@ -687,7 +685,7 @@ int fs_rmdir(const char *path) {
         free(_dir);
         return -ENOENT;
     }
-    struct fs_dirent empty_entry = {.inode = 0, .name = 0, .valid = 0};
+    struct fs_dirent empty_entry = {0};
     _dir[found] = empty_entry;
     block_write(_dir, blknum, 1);
 
@@ -779,7 +777,9 @@ int fs_chmod(const char *path, mode_t mode) {
 
 int fs_utime(const char *path, struct utimbuf *ut) {
     /* your code here */
-    int inum = translate(path);
+    char * _path = strdup(path);
+    int inum = translate(_path);
+    free(_path);
     if (inum < 0) {
         return inum;
     }
@@ -922,16 +922,14 @@ int fs_write(const char *path, const char *buf, size_t len, off_t offset,
     char *_path = strdup(path);
     int inum = translate(_path);
     if (inum == -ENOENT || inum == -ENOTDIR) {
-        printf("path translation error.\n");
         return inum;
     }
     struct fs_inode _in;
     block_read(&_in, inum, 1);
     // inode isn't a file return EISDIR
-    printf("Inum: %d\n", inum);
     if (!S_ISREG(_in.mode)) {
-        printf("mode: %o", _in.mode);
-        printf("It isn't a file.\n");
+        // printf("mode: %o", _in.mode);
+        // printf("It isn't a file.\n");
         return EISDIR;
     }
 
