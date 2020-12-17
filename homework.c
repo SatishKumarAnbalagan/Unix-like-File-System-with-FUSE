@@ -243,13 +243,9 @@ int find_free_inode_map_bit() {
     return -ENOSPC;
 }
 
-void update_bitmap() {
-    block_write(&bitmap, 1, 1);
-}
+void update_bitmap() { block_write(&bitmap, 1, 1); }
 
-void update_inode(struct fs_inode *_in, int inum) {
-    block_write(_in, inum, 1);
-}
+void update_inode(struct fs_inode *_in, int inum) { block_write(_in, inum, 1); }
 
 static char *get_name(char *path) {
     int i = strlen(path) - 1;
@@ -373,6 +369,20 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     return 0;
 }
 
+static void gen_inode(struct fs_inode *inode, mode_t mode) {
+    struct fuse_context *ctx = fuse_get_context();
+    uint16_t uid = ctx->uid;
+    uint16_t gid = ctx->gid;
+    time_t time_raw_format;
+    time(&time_raw_format);
+    inode->uid = uid;
+    inode->gid = gid;
+    inode->ctime = time_raw_format;
+    inode->mtime = time_raw_format;
+    inode->mode = mode;
+    inode->size = 0;
+}
+
 /* create - create a new file with specified permissions
  *
  * success - return 0
@@ -418,16 +428,9 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     }
 
     // set inode region bitmap
-    time_t time_raw_format;
-    time(&time_raw_format);
-    struct fs_inode new_inode = {
-        .uid = getuid(),
-        .gid = getgid(),
-        .mode = mode,
-        .ctime = time_raw_format,
-        .mtime = time_raw_format,
-        .size = 0,
-    };
+    struct fs_inode new_inode;
+    gen_inode(&new_inode, mode);
+
     int free_inum = find_free_inode_map_bit();
     if (free_inum < 0) {
         return -ENOSPC;
@@ -507,44 +510,34 @@ int fs_mkdir(const char *path, mode_t mode) {
     }
 
     // set inode region bitmap
-    time_t time_raw_format;
-    time(&time_raw_format);
-    struct fs_inode new_inode = {.uid = getuid(),
-                                 .gid = getgid(),
-                                 .mode = mode,
-                                 .ctime = time_raw_format,
-                                 .mtime = time_raw_format,
-                                 .size = 0,
-                                 .ptrs = {0}};
 
-    int free_blk_num = find_free_block_number();
-    if (free_blk_num < 0) {
+    struct fs_inode new_inode;
+    gen_inode(&new_inode, mode);
+
+    int free_inode_num = find_free_block_number();
+    if (free_inode_num < 0) {
         return -ENOSPC;
     }
-    bit_set(bitmap, free_blk_num);
+    bit_set(bitmap, free_inode_num);
+    update_bitmap();
+    int free_diren_num = find_free_block_number();
+    bit_set(bitmap, free_diren_num);
     update_bitmap();
 
-    new_inode.ptrs[0] = free_blk_num;
+    printf("free_inode_num %d\n", free_inode_num);
+    printf("free_diren_num %d\n", free_diren_num);
+
+    new_inode.ptrs[0] = free_diren_num;
     int *free_block = (int *)calloc(FS_BLOCK_SIZE, sizeof(int));
-    block_write(free_block, new_inode.ptrs[0], 1);
+    block_write(free_block, free_diren_num, 1);
 
-    int free_inum = find_free_inode_map_bit();
-    if (free_inum < 0) {
-        free(free_block);
-        return -ENOSPC;
-    }
-    bit_set(bitmap, free_inum);
-    update_bitmap();
-
-    // memcpy(&parent_inode.ptrs[free_inum], &new_inode, sizeof(struct
-    // fs_inode));
-    update_inode(&new_inode, free_inum);
+    update_inode(&new_inode, free_inode_num);
 
     // set parent_inode dirent then write it
     char *tmp_name = pathv[pathc - 1];
     struct fs_dirent new_dirent = {
         .valid = 1,
-        .inode = free_inum,
+        .inode = free_inode_num,
         .name = "",
     };
     memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
@@ -609,7 +602,7 @@ int fs_unlink(const char *path) {
     struct fs_dirent dir[MAX_DIREN_NUM];
     block_read(dir, blknum, 1);
     int found = exists_in_directory(dir, name);
-    if (!found) {
+    if (found < 0) {
         return -ENOENT;
     }
     struct fs_dirent empty_entry = {0};
@@ -647,17 +640,23 @@ int fs_rmdir(const char *path) {
             return -ENOTEMPTY;
         }
     }
-    
+
     char *parent_path;
     int truncate_result = truncate_path(path, &parent_path);
-    // Linux will never generate call to remove root directory. no need to handle error.
+    // Linux will never generate call to remove root directory. no need to
+    // handle error.
     if (!truncate_result) {
         // printf("ERROR: Deleting the root directory\n");
         return truncate_result;
     }
 
+    // remove directory entry block
+    int diren_inum = inode.ptrs[0];
+    bit_clear(bitmap, diren_inum);
+
     // clear inode_map corresponding bit
     bit_clear(bitmap, inum);
+
     update_bitmap();
 
     // remove entry from parent dir
@@ -681,7 +680,7 @@ int fs_rmdir(const char *path) {
     block_read(_dir, blknum, 1);
     int found = exists_in_directory(_dir, name);
 
-    if (!found) {
+    if (found < 0) {
         free(_dir);
         return -ENOENT;
     }
@@ -777,7 +776,7 @@ int fs_chmod(const char *path, mode_t mode) {
 
 int fs_utime(const char *path, struct utimbuf *ut) {
     /* your code here */
-    char * _path = strdup(path);
+    char *_path = strdup(path);
     int inum = translate(_path);
     free(_path);
     if (inum < 0) {
@@ -824,10 +823,8 @@ int fs_truncate(const char *path, off_t len) {
         char zeros[FS_BLOCK_SIZE];
         memset(zeros, 0, FS_BLOCK_SIZE);
         block_write(zeros, bck_num, 1);
-        if (i != 0) {
-            bit_clear(bitmap, bck_num);
-            _in.ptrs[i] = 0;
-        }
+        bit_clear(bitmap, bck_num);
+        _in.ptrs[i] = 0;
     }
 
     _in.size = len;
@@ -849,11 +846,11 @@ int fs_read(const char *path, char *buf, size_t len, off_t offset,
     int byte_read = 0;
     char *_path = strdup(path);
     int inum = translate(_path);
-    if (inum == ENOENT || inum == ENOTDIR) return inum;
+    if (inum == -ENOENT || inum == -ENOTDIR) return inum;
     struct fs_inode _in;
     block_read(&_in, inum, 1);
     // inode isn't a file return EISDIR
-    if (!S_ISREG(_in.mode)) return EISDIR;
+    if (!S_ISREG(_in.mode)) return -EISDIR;
 
     int file_len = _in.size;
     if (offset >= file_len) return byte_read;
