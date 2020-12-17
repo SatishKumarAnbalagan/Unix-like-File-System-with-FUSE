@@ -107,7 +107,7 @@ START_TEST(fs_mkdir_single_test) {
     printf("\n Parent dir: %s\n", parentdir);
     // int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     //                off_t offset, struct fuse_file_info *fi)
-    readdirtest_t readdirtest = {newdir, 0};
+    readdirtest_t readdirtest = {"newdir", 0};
 
     int read_status =
         fs_ops.readdir(parentdir, &readdirtest, test_filler, 0, NULL);
@@ -119,11 +119,8 @@ START_TEST(fs_mkdir_single_test) {
 }
 END_TEST
 
-readdirtest_t mkdir_table[] = {{"mkdir1", 0},
-                               {"mkdir2", 0},
-                               {"mkdir3", 0},
-                               {"mkdir4", 0},
-                               {NULL}};
+readdirtest_t mkdir_table[] = {
+    {"mkdir1", 0}, {"mkdir2", 0}, {"mkdir3", 0}, {"mkdir4", 0}, {NULL}};
 
 START_TEST(fs_mkdir_test) {
     printf("fs_mkdir_test\n\n");
@@ -132,7 +129,6 @@ START_TEST(fs_mkdir_test) {
     mode_t mode = 0777;
     printf("\n Parent dir: %s\n", parentdir);
     for (int i = 0; mkdir_table[i].childpath != NULL; i++) {
-
         char combined_path[100];
         sprintf(combined_path, "%s%s", parentdir, mkdir_table[i].childpath);
         int mkdir_status = fs_ops.mkdir(combined_path, mode);
@@ -164,7 +160,7 @@ START_TEST(fs_rmdir_test) {
     // check empty dir created.
     const char *parentdir = "/dir2";
     char *newdir = "/dir2/newdir";
-    char * nameonly = "newdir";
+    char *nameonly = "newdir";
     mode_t mode = 0777;
     int mkdir_status = fs_ops.mkdir(newdir, mode);
     printf("mkdir: %s, status is %d\n", newdir, mkdir_status);
@@ -197,11 +193,8 @@ START_TEST(fs_rmdir_test) {
 }
 END_TEST
 
-readdirtest_t fscreate_table[] = {{"create1", 0},
-                                  {"create2", 0},
-                                  {"create3", 0},
-                                  {"create4", 0},
-                                  {NULL}};
+readdirtest_t fscreate_table[] = {
+    {"create1", 0}, {"create2", 0}, {"create3", 0}, {"create4", 0}, {NULL}};
 
 void fscreate_test() {
     const char *parentdir = "/dir3/";
@@ -210,8 +203,7 @@ void fscreate_test() {
     for (int i = 0; fscreate_table[i].childpath != NULL; i++) {
         char combined_path[100];
         sprintf(combined_path, "%s%s", parentdir, fscreate_table[i].childpath);
-        int mkdir_status =
-            fs_ops.create(combined_path, mode, NULL);
+        int mkdir_status = fs_ops.create(combined_path, mode, NULL);
         printf("create node: %s, status is %d\n", fscreate_table[i].childpath,
                mkdir_status);
         ck_assert_int_eq(mkdir_status, 0);
@@ -225,7 +217,8 @@ void fscreate_test() {
             fs_ops.readdir(parentdir, &fscreate_table[j], test_filler, 0, NULL);
         ck_assert_int_eq(read_status, 0);
         if (fscreate_table[j].found == 0) {
-            printf("new file: %s not found. create error\n", fscreate_table[j].childpath);
+            printf("new file: %s not found. create error\n",
+                   fscreate_table[j].childpath);
             ck_abort();
         }
         // reset table.
@@ -246,12 +239,11 @@ START_TEST(fs_unlink_test) {
     const char *parentdir = "/dir3/";
     printf("\n Parent dir: %s\n", parentdir);
     for (int i = 0; fscreate_table[i].childpath != NULL; i++) {
-                char combined_path[100];
+        char combined_path[100];
         sprintf(combined_path, "%s%s", parentdir, fscreate_table[i].childpath);
 
         int unlink_status = fs_ops.unlink(combined_path);
-        printf("remove node: %s, status is %d\n", combined_path,
-               unlink_status);
+        printf("remove node: %s, status is %d\n", combined_path, unlink_status);
         ck_assert_int_eq(unlink_status, 0);
     }
 
@@ -364,7 +356,8 @@ START_TEST(fsmkdir_error_test) {
 
     expected = 0;
     printf(
-        "too-long name (more than 27 characters) (should return %d and truncate "
+        "too-long name (more than 27 characters) (should return %d and "
+        "truncate "
         "the name)\n",
         expected);
     actual = fs_ops.mkdir(
@@ -527,26 +520,33 @@ END_TEST
 // int fs_write(const char *path, const char *buf, size_t len, off_t offset,
 //              struct fuse_file_info *fi)
 START_TEST(fswrite_append_test) {
-    char *paths[] = {"/OneBlock", NULL};
-    int init_lens[] = {FS_BLOCK_SIZE};
-    int after_append_lens[] = {FS_BLOCK_SIZE * 2 - 1};
+    char *paths[] = {"/OneBlock", "/TwoBlock", NULL};
+    int init_lens[] = {FS_BLOCK_SIZE, FS_BLOCK_SIZE* 2};
+    int after_append_lens[] = {FS_BLOCK_SIZE * 2 - 1, FS_BLOCK_SIZE * 4};
     int steps[] = {17, 100, 1000, 1024, 1970, 3000};
 
     for (int i = 0; paths[i] != NULL; i++) {
         // TODO: may be wrong here
+        printf("\nTest initial file block size: %s\n", paths[i]);
         for (int j = 0; j < 6; j++) {
-            char m_path[40];
+            char m_path[50];
             sprintf(m_path, "%s.%d", paths[i], steps[j]);
             int file_len = after_append_lens[i];
+            // create empty file
+            mode_t mode = 0000777 | S_IFREG;
+            printf(
+                "\n Create file path: %s, mode: %o small chunk append step is "
+                "%d\n",
+                m_path, mode, steps[j]);
+            int create_status = fs_ops.create(m_path, mode, NULL);
+            ck_assert_int_eq(0, create_status);
 
             char *buf = malloc(file_len);
             gen_buff(buf, init_lens[i]);
 
-            int byte_written = fs_ops.write(paths[i], buf, init_lens[i], 0,
+            int byte_written = fs_ops.write(m_path, buf, init_lens[i], 0,
                                             NULL);  // 4000 bytes, offset=0
             printf("Init Byte writte: %d ", byte_written);
-            printf("Path is %s\t small chunk append step is %d\n", m_path,
-                   steps[j]);
 
             // append to file.
             for (int offset = init_lens[i]; offset < file_len;
@@ -603,19 +603,19 @@ int main(int argc, char **argv) {
 
     SRunner *sr = srunner_create(s);
 
-    // setupTestcase(s, "fs_mkdir_test", fs_mkdir_test);
+    setupTestcase(s, "fs_mkdir_test", fs_mkdir_test);
     setupTestcase(s, "rmdir single test", fs_rmdir_test);
-    // setupTestcase(s, "create test", fs_create_test);
-    // setupTestcase(s, "fs_unlink_test", fs_unlink_test);
-    // setupTestcase(s, "fs_mkdir_single_test", fs_mkdir_single_test);
+    setupTestcase(s, "create test", fs_create_test);
+    setupTestcase(s, "fs_unlink_test", fs_unlink_test);
+    setupTestcase(s, "fs_mkdir_single_test", fs_mkdir_single_test);
 
-    // setupTestcase(s, "fs_rmdir_error_test", fs_rmdir_error_test);
-    // setupTestcase(s, "fs_unlink_error_test", fs_unlink_error_test);
-    // setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
-    // setupTestcase(s, "fsmknod_error_test", fsmknod_error_test);
-    // setupTestcase(s, "fswrite_append_test", fswrite_append_test);
-    // setupTestcase(s, "fswrite_test", fswrite_test);
-    // setupTestcase(s, "write_smallfile_test", write_smallfile_test);
+    setupTestcase(s, "fs_rmdir_error_test", fs_rmdir_error_test);
+    setupTestcase(s, "fs_unlink_error_test", fs_unlink_error_test);
+    setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
+    setupTestcase(s, "fsmknod_error_test", fsmknod_error_test);
+    setupTestcase(s, "fswrite_append_test", fswrite_append_test);
+    setupTestcase(s, "fswrite_test", fswrite_test);
+    setupTestcase(s, "write_smallfile_test", write_smallfile_test);
     srunner_set_fork_status(sr, CK_NOFORK);
 
     srunner_run_all(sr, CK_VERBOSE);
