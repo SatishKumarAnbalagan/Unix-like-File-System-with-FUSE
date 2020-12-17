@@ -369,6 +369,20 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     return 0;
 }
 
+static void gen_inode(struct fs_inode *inode, mode_t mode) {
+    struct fuse_context *ctx = fuse_get_context();
+    uint16_t uid = ctx->uid;
+    uint16_t gid = ctx->gid;
+    time_t time_raw_format;
+    time(&time_raw_format);
+    inode->uid = uid;
+    inode->gid = gid;
+    inode->ctime = time_raw_format;
+    inode->mtime = time_raw_format;
+    inode->mode = mode;
+    inode->size = 0;
+}
+
 /* create - create a new file with specified permissions
  *
  * success - return 0
@@ -414,16 +428,9 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     }
 
     // set inode region bitmap
-    time_t time_raw_format;
-    time(&time_raw_format);
-    struct fs_inode new_inode = {
-        .uid = getuid(),
-        .gid = getgid(),
-        .mode = mode,
-        .ctime = time_raw_format,
-        .mtime = time_raw_format,
-        .size = 0,
-    };
+    struct fs_inode new_inode;
+    gen_inode(&new_inode, mode);
+    
     int free_inum = find_free_inode_map_bit();
     if (free_inum < 0) {
         return -ENOSPC;
@@ -655,7 +662,7 @@ int fs_rmdir(const char *path) {
 
     // clear inode_map corresponding bit
     bit_clear(bitmap, inum);
-    
+
     update_bitmap();
 
     // remove entry from parent dir
