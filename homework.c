@@ -637,6 +637,7 @@ int fs_rmdir(const char *path) {
         return inum;
     }
 
+    // check if directory is empty. If not return ENOTEMPTY
     struct fs_inode inode;
     block_read(&inode, inum, 1);
     if (!S_ISDIR(inode.mode)) {
@@ -690,19 +691,8 @@ int fs_rmdir(const char *path) {
     _dir[found] = empty_entry;
     block_write(_dir, blknum, 1);
 
-    // struct fs_dirent *_pdir = malloc(FS_BLOCK_SIZE);
-    // block_read(_pdir, blknum, 1);
-    // found = exists_in_directory(_dir, name);
-    // if (!found) {
-    //     free(_pdir);
-    //     return -ENOENT;
-    // }
-    // block_write(_dir, blknum, 1);
-
     free(_dir);
-    // free(_pdir);
     free(_path);
-    // free(_in);
     return 0;
 }
 

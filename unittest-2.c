@@ -164,6 +164,7 @@ START_TEST(fs_rmdir_test) {
     // check empty dir created.
     const char *parentdir = "/dir2";
     char *newdir = "/dir2/newdir";
+    char * nameonly = "newdir";
     mode_t mode = 0777;
     int mkdir_status = fs_ops.mkdir(newdir, mode);
     printf("mkdir: %s, status is %d\n", newdir, mkdir_status);
@@ -172,7 +173,7 @@ START_TEST(fs_rmdir_test) {
     printf("\n Parent dir: %s\n", parentdir);
     // int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
     //                off_t offset, struct fuse_file_info *fi)
-    readdirtest_t mkdir_read = {newdir, 0};
+    readdirtest_t mkdir_read = {nameonly, 0};
 
     int read_status =
         fs_ops.readdir(parentdir, &mkdir_read, test_filler, 0, NULL);
@@ -603,12 +604,12 @@ int main(int argc, char **argv) {
     SRunner *sr = srunner_create(s);
 
     // setupTestcase(s, "fs_mkdir_test", fs_mkdir_test);
-    // setupTestcase(s, "rmdir single test", fs_rmdir_test);
+    setupTestcase(s, "rmdir single test", fs_rmdir_test);
     // setupTestcase(s, "create test", fs_create_test);
     // setupTestcase(s, "fs_unlink_test", fs_unlink_test);
     // setupTestcase(s, "fs_mkdir_single_test", fs_mkdir_single_test);
 
-    setupTestcase(s, "fs_rmdir_error_test", fs_rmdir_error_test);
+    // setupTestcase(s, "fs_rmdir_error_test", fs_rmdir_error_test);
     // setupTestcase(s, "fs_unlink_error_test", fs_unlink_error_test);
     // setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
     // setupTestcase(s, "fsmknod_error_test", fsmknod_error_test);
