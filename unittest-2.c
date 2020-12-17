@@ -430,16 +430,16 @@ START_TEST(fs_rmdir_error_test) {
     // bad path /a/b/c - c doesn't exist (ENOENT)
     expected = -ENOENT;
     printf(" bad path /a/b/c - c doesn't exist (should return %d)\n", expected);
-    actual = fs_ops.unlink("/dir3/subdir/notexist");
+    actual = fs_ops.rmdir("/dir3/subdir/notexist");
     printf("actual status: %d\n", actual);
     ck_assert_int_eq(expected, actual);
 
     // bad path /a/b/c - c is file (ENOTDIR)
-    expected = -EISDIR;
+    expected = -ENOTDIR;
     char *enotdirpath = "/dir3/file.12k-";
     printf("bad path: %s \t /a/b/c - c exists, is file(should return %d)\n",
            enotdirpath, expected);
-    actual = fs_ops.unlink(enotdirpath);
+    actual = fs_ops.rmdir(enotdirpath);
     printf("actual status: %d\n", actual);
     ck_assert_int_eq(expected, actual);
 
@@ -448,7 +448,7 @@ START_TEST(fs_rmdir_error_test) {
     char *ENOTEMPTY_path = "/dir3/subdir";
     printf("bad path: %s \t directory not empty (should return %d)\n",
            ENOTEMPTY_path, expected);
-    actual = fs_ops.unlink(ENOTEMPTY_path);
+    actual = fs_ops.rmdir(ENOTEMPTY_path);
     printf("actual status: %d\n", actual);
     ck_assert_int_eq(expected, actual);
 }
@@ -605,10 +605,10 @@ int main(int argc, char **argv) {
     // setupTestcase(s, "fs_mkdir_test", fs_mkdir_test);
     // setupTestcase(s, "rmdir single test", fs_rmdir_test);
     // setupTestcase(s, "create test", fs_create_test);
-    setupTestcase(s, "fs_unlink_test", fs_unlink_test);
+    // setupTestcase(s, "fs_unlink_test", fs_unlink_test);
     // setupTestcase(s, "fs_mkdir_single_test", fs_mkdir_single_test);
 
-    // setupTestcase(s, "fs_rmdir_error_test", fs_rmdir_error_test);
+    setupTestcase(s, "fs_rmdir_error_test", fs_rmdir_error_test);
     // setupTestcase(s, "fs_unlink_error_test", fs_unlink_error_test);
     // setupTestcase(s, "fsmkdir_error_test", fsmkdir_error_test);
     // setupTestcase(s, "fsmknod_error_test", fsmknod_error_test);

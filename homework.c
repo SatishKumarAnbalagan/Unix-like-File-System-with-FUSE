@@ -630,11 +630,26 @@ int fs_unlink(const char *path) {
  */
 int fs_rmdir(const char *path) {
     /* your code here */
-    int inum = translate(path);
+    char *duppath = strdup(path);
+    int inum = translate(duppath);
+    free(duppath);
     if (inum == -ENOENT || inum == -ENOTDIR) {
         return inum;
     }
 
+    struct fs_inode inode;
+    block_read(&inode, inum, 1);
+    if (!S_ISDIR(inode.mode)) {
+        return -ENOTDIR;
+    }
+    struct fs_dirent entries[MAX_DIREN_NUM];
+    block_read(entries, inode.ptrs[0], 1);
+    for (int i = 0; i < MAX_DIREN_NUM; i++) {
+        if (entries[i].valid) {
+            return -ENOTEMPTY;
+        }
+    }
+    
     char *parent_path;
     int truncate_result = truncate_path(path, &parent_path);
     if (!truncate_result) {
@@ -642,8 +657,12 @@ int fs_rmdir(const char *path) {
         return truncate_result;
     }
 
-    int parent_inum = translate(parent_path);
+    // clear inode_map corresponding bit
+    bit_clear(bitmap, inum);
+    update_bitmap();
+
     // remove entry from parent dir
+    int parent_inum = translate(parent_path);
     char *_path = strdup(path);
     if (_path[strlen(_path) - 1] == '/') {
         _path[strlen(_path) - 1] = '\0';
@@ -651,13 +670,14 @@ int fs_rmdir(const char *path) {
     char *name = get_name(_path);
     free(parent_path);
 
-    struct fs_inode *_in = (struct fs_inode *)malloc(sizeof(struct fs_inode));
-    block_read(_in, parent_inum, 1);
-    if (!S_ISDIR(_in->mode)) {
-        free(_in);
+    struct fs_inode *parent_inode =
+        (struct fs_inode *)malloc(sizeof(struct fs_inode));
+    block_read(parent_inode, parent_inum, 1);
+    if (!S_ISDIR(parent_inode->mode)) {
+        free(parent_inode);
         return -ENOTDIR;
     }
-    int blknum = _in->ptrs[0];
+    int blknum = parent_inode->ptrs[0];
     struct fs_dirent *_dir = malloc(FS_BLOCK_SIZE);
     block_read(_dir, blknum, 1);
     int found = exists_in_directory(_dir, name);
@@ -666,24 +686,23 @@ int fs_rmdir(const char *path) {
         free(_dir);
         return -ENOENT;
     }
-
-    // clear inode_map corresponding bit
-    bit_clear(bitmap, inum);
-    update_bitmap();
-
-    struct fs_dirent *_pdir = malloc(FS_BLOCK_SIZE);
-    block_read(_pdir, blknum, 1);
-    found = exists_in_directory(_dir, name);
-    if (!found) {
-        free(_pdir);
-        return -ENOENT;
-    }
+    struct fs_dirent empty_entry = {.inode = 0, .name = 0, .valid = 0};
+    _dir[found] = empty_entry;
     block_write(_dir, blknum, 1);
 
+    // struct fs_dirent *_pdir = malloc(FS_BLOCK_SIZE);
+    // block_read(_pdir, blknum, 1);
+    // found = exists_in_directory(_dir, name);
+    // if (!found) {
+    //     free(_pdir);
+    //     return -ENOENT;
+    // }
+    // block_write(_dir, blknum, 1);
+
     free(_dir);
-    free(_pdir);
+    // free(_pdir);
     free(_path);
-    free(_in);
+    // free(_in);
     return 0;
 }
 
