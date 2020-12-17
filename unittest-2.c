@@ -229,8 +229,14 @@ void fscreate_test() {
 START_TEST(fs_create_test) {
     printf("fscreate_test\n\n");
     fscreate_test();
+    printf("reset disk img\n");
+    // system("python gen-disk.py -q disk1.in test.img");
 }
 END_TEST
+// blocks used:  0  1  2  21  22  26  29  51  55  59  65  71  85  102  109  116
+//               122  136  139  146  151  188  189  213  229  233  238  244  253
+//               266  268  270 283  295  297  311  326  327  332  338  339  363
+//               365  389  399
 
 START_TEST(fs_unlink_test) {
     printf("fs_unlink_test\n\n");
@@ -521,7 +527,7 @@ END_TEST
 //              struct fuse_file_info *fi)
 START_TEST(fswrite_append_test) {
     char *paths[] = {"/OneBlock", "/TwoBlock", NULL};
-    int init_lens[] = {FS_BLOCK_SIZE, FS_BLOCK_SIZE* 2};
+    int init_lens[] = {FS_BLOCK_SIZE, FS_BLOCK_SIZE * 2};
     int after_append_lens[] = {FS_BLOCK_SIZE * 2 - 1, FS_BLOCK_SIZE * 4};
     int steps[] = {17, 100, 1000, 1024, 1970, 3000};
 
@@ -569,6 +575,32 @@ START_TEST(fswrite_append_test) {
 }
 END_TEST
 
+START_TEST(fs_truncate_test) {
+    char *paths[] = {
+        "/dir3/subdir/file.4k-",
+        "/dir3/subdir/file.8k-",
+        "/dir3/subdir/file.12k",
+    };
+    int expected_freed[] = {0, 1, 2};
+    struct statvfs st;
+    fs_ops.statfs("nothing", &st);
+    int num_free = st.f_bfree;
+    for (int i = 0; i < 3; i++) {
+        int offset = 0;
+        printf("Truncate path %s, with offset %d\n", paths[i], offset);
+        fs_ops.truncate(paths[i], offset);
+
+        fs_ops.statfs("nothing", &st);
+        int new_num_free = st.f_bfree;
+        int bck_freed = new_num_free - num_free;
+        printf("Expected #block freed: %d, Actual freed: %d\n",
+               expected_freed[i], bck_freed);
+        ck_assert_int_eq(expected_freed[i], bck_freed);
+        num_free = new_num_free;
+    }
+}
+END_TEST
+
 void reset_testdata() {
     for (int i = 0; mkdir_table[i].childpath != NULL; i++) {
         mkdir_table[i].found = 0;
@@ -584,11 +616,17 @@ void setup() {
     system("python gen-disk.py -q disk1.in test.img");
     reset_testdata();
 }
+void teardown() {
+    printf("\n<<< END of TEST\n\n");
+    // Regenerate the test image each time of tests.
+    system("python gen-disk.py -q disk1.in test.img");
+    reset_testdata();
+}
 
 void setupTestcase(Suite *s, const char *str, void (*f)(int)) {
     TCase *tc = tcase_create(str);
     tcase_add_test(tc, f);
-    tcase_add_unchecked_fixture(tc, setup, NULL);
+    tcase_add_unchecked_fixture(tc, setup, teardown);
     suite_add_tcase(s, tc);
 }
 
@@ -616,6 +654,7 @@ int main(int argc, char **argv) {
     setupTestcase(s, "fswrite_append_test", fswrite_append_test);
     setupTestcase(s, "fswrite_test", fswrite_test);
     setupTestcase(s, "write_smallfile_test", write_smallfile_test);
+    setupTestcase(s, "truncate test", fs_truncate_test);
     srunner_set_fork_status(sr, CK_NOFORK);
 
     srunner_run_all(sr, CK_VERBOSE);
