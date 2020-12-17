@@ -430,7 +430,7 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
     // set inode region bitmap
     struct fs_inode new_inode;
     gen_inode(&new_inode, mode);
-    
+
     int free_inum = find_free_inode_map_bit();
     if (free_inum < 0) {
         return -ENOSPC;
@@ -686,7 +686,7 @@ int fs_rmdir(const char *path) {
     block_read(_dir, blknum, 1);
     int found = exists_in_directory(_dir, name);
 
-    if (!found) {
+    if (found < 0) {
         free(_dir);
         return -ENOENT;
     }
@@ -829,10 +829,8 @@ int fs_truncate(const char *path, off_t len) {
         char zeros[FS_BLOCK_SIZE];
         memset(zeros, 0, FS_BLOCK_SIZE);
         block_write(zeros, bck_num, 1);
-        if (i != 0) {
-            bit_clear(bitmap, bck_num);
-            _in.ptrs[i] = 0;
-        }
+        bit_clear(bitmap, bck_num);
+        _in.ptrs[i] = 0;
     }
 
     _in.size = len;
