@@ -11,7 +11,7 @@ unittest-2: unittest-2.o homework.o misc.o
 
 hw3fuse: misc.o homework.o hw3fuse.o
 
-all: unittest-1 unittest-2 hw3fuse test.img
+all: unittest-1 unittest-2 hw3fuse test.img test2.img
 
 # force test.img, test2.img to be rebuilt each time
 .PHONY: test.img test2.img

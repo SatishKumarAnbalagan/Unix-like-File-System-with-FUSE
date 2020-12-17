@@ -9,6 +9,7 @@
 #define FUSE_USE_VERSION 27
 #define _FILE_OFFSET_BITS 64
 
+#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <fuse.h>
@@ -42,12 +43,6 @@ extern int block_write(void *buf, int lba, int nblks);
 /* global variables */
 struct fs_super superblock;
 unsigned char bitmap[FS_BLOCK_SIZE];
-fd_set *inode_map;
-fd_set *block_map;
-struct fs_inode *inode_region; /* inodes in memory */
-int inode_map_sz;
-int block_map_sz;
-int num_of_blocks;
 
 /* function declaration */
 
@@ -61,6 +56,9 @@ static int translate(char *path);
 void bit_set(unsigned char *map, int i) { map[i / 8] |= (1 << (i % 8)); }
 void bit_clear(unsigned char *map, int i) { map[i / 8] &= ~(1 << (i % 8)); }
 int bit_test(unsigned char *map, int i) { return map[i / 8] & (1 << (i % 8)); }
+
+/* function prototype fs_truncate will be used in fs_unlink*/
+int fs_truncate(const char *path, off_t len);
 
 /* init - this is called once by the FUSE framework at startup. Ignore
  * the 'conn' argument.
@@ -113,7 +111,7 @@ static int parse_path(char *path, char **pathv) {
 
     int i;
     for (i = 0; i < MAX_PATH_LEN; i++) {
-        if ((pathv[i] = strtok(path, "/")) == NULL) break;
+        if ((pathv[i] = strtok((char *)path, "/")) == NULL) break;
         if (strlen(pathv[i]) > MAX_NAME_LEN)
             pathv[i][MAX_NAME_LEN] = 0;  // truncate to 27 characters
         path = NULL;
@@ -121,9 +119,7 @@ static int parse_path(char *path, char **pathv) {
     return i;
 }
 
-static int translate(char *path) {
-    char *pathv[10];
-    int pathc = parse_path(path, pathv);
+static int translate_pathv(char *pathv[], int pathc) {
     int inum = 2;  // root inode
     for (int i = 0; i < pathc; i++) {
         struct fs_inode _in;
@@ -136,15 +132,25 @@ static int translate(char *path) {
         block_read(des, blknum, 1);
         int entry_found = 0;
         for (int j = 0; j < MAX_DIREN_NUM; j++) {
+            // if (des[j].valid) {
+            //     printf("des entry: %s\n", des[j].name);
+            // }
             if (des[j].valid && strcmp(des[j].name, pathv[i]) == 0) {
                 inum = des[j].inode;
                 entry_found = 1;
                 break;
             }
         }
+
         if (!entry_found) return -ENOENT;
     }
     return inum;
+}
+
+static int translate(char *path) {
+    char *pathv[10];
+    int pathc = parse_path(path, pathv);
+    return translate_pathv(pathv, pathc);
 }
 
 static int find_enclosing(char *path) {
@@ -212,28 +218,82 @@ static void set_attr(struct fs_inode inode, struct stat *sb) {
     sb->st_mtime = inode.mtime;
 }
 
-/* check whether this inode is a directory */
-int inode_is_dir(int father_inum, int inum) {
-    struct fs_inode *inode;
-    struct fs_dirent *dir;
-    dir = malloc(FS_BLOCK_SIZE);
+int find_free_dirent_num(struct fs_inode *inode) {
+    struct fs_dirent dir[MAX_DIREN_NUM];
+    int blknum = inode->ptrs[0];
+    block_read(dir, blknum, 1);
 
-    inode = &inode_region[father_inum];
-    int block_pos = inode->ptrs[0];
-    block_write(dir, block_pos, 1);
-    int i;
-    for (i = 0; i < 32; i++) {
-        if (dir[i].valid == 0) {
-            continue;
-        }
-        if (dir[i].inode == inum) {
-            int result = dir[i].inode;
-            free(dir);
-            return result;
+    int no_free_dirent = -1;
+    for (int i = 0; i < MAX_DIREN_NUM; i++) {
+        if (!dir[i].valid) {
+            no_free_dirent = i;
+            break;
         }
     }
-    free(dir);
-    return 0;
+    return no_free_dirent;
+}
+
+int find_free_inode_map_bit() {
+    int inode_capacity = FS_BLOCK_SIZE * 8;
+    for (int i = 2; i < inode_capacity; i++) {
+        if (!bit_test(bitmap, i)) {
+            return i;
+        }
+    }
+    return -ENOSPC;
+}
+
+void update_bitmap() {
+    block_write(&bitmap, 1, 1);
+}
+
+void update_inode(struct fs_inode *_in, int inum) {
+    block_write(_in, inum, 1);
+}
+
+static char *get_name(char *path) {
+    int i = strlen(path) - 1;
+    for (; i >= 0; i--) {
+        if (path[i] == '/') {
+            i++;
+            break;
+        }
+    }
+    char *result = &path[i];
+    return result;
+}
+
+static int is_in_same_directory(char *src_path, char *dst_path,
+                                char *src_pathv[], int *src_pathc,
+                                char *dst_pathv[], int *dst_pathc) {
+    *src_pathc = parse_path(src_path, src_pathv);
+    *dst_pathc = parse_path(dst_path, dst_pathv);
+    if (*src_pathc != *dst_pathc) return -1;
+    for (int i = 0; i < *src_pathc - 1; i++) {
+        if (strcmp(src_pathv[i], dst_pathv[i]) != 0) return -1;
+    }
+    return 1;
+}
+
+static int exists_in_directory(struct fs_dirent des[], char *name) {
+    for (int i = 0; i < MAX_DIREN_NUM; i++) {
+        if (des[i].valid && strcmp(des[i].name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+int find_free_block_number() {
+    for (int i = 0; i < FS_BLOCK_SIZE * 8; i++) {
+        if (!bit_test(bitmap, i)) {
+            int *free_blk = calloc(1, FS_BLOCK_SIZE);
+            block_write(free_blk, i, 1);
+            free(free_blk);
+            return i;
+        }
+    }
+    return -ENOSPC;
 }
 
 /* getattr - get file or directory attributes. For a description of
@@ -328,8 +388,77 @@ int fs_readdir(const char *path, void *ptr, fuse_fill_dir_t filler,
  * entire block), you are free to return -ENOSPC instead of expanding it.
  */
 int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
-    /* your code here */
-    return -EOPNOTSUPP;
+    // check if parent dir exist
+
+    char *duppath = strdup(path);
+    char *pathv[MAX_PATH_LEN];
+    int pathc = parse_path(duppath, pathv);
+
+    int inum_dir = translate_pathv(pathv, pathc - 1);
+
+    if (inum_dir == -ENOENT || inum_dir == -ENOTDIR) {
+        return inum_dir;
+    }
+
+    // check if file exists
+    int inum = translate_pathv(pathv, pathc);
+    if (inum > 0) {
+        return -EEXIST;
+    }
+
+    struct fs_inode parent_inode;
+    block_read(&parent_inode, inum_dir, 1);
+    if (!S_ISDIR(parent_inode.mode)) {
+        return -ENOTDIR;
+    }
+
+    int no_free_dirent = find_free_dirent_num(&parent_inode);
+    if (no_free_dirent < 0) {
+        return -ENOSPC;
+    }
+
+    // set inode region bitmap
+    time_t time_raw_format;
+    time(&time_raw_format);
+    struct fs_inode new_inode = {
+        .uid = getuid(),
+        .gid = getgid(),
+        .mode = mode,
+        .ctime = time_raw_format,
+        .mtime = time_raw_format,
+        .size = 0,
+    };
+    int free_inum = find_free_inode_map_bit();
+    if (free_inum < 0) {
+        return -ENOSPC;
+    }
+    bit_set(bitmap, free_inum);
+    update_bitmap();
+
+    // memcpy(&inode_region[free_inum], &new_inode, sizeof(struct fs_inode));
+    update_inode(&new_inode, free_inum);
+
+    // set parent_inode dirent then write it
+
+    char *tmp_name = pathv[pathc - 1];
+    struct fs_dirent new_dirent = {
+        .valid = 1,
+        .inode = free_inum,
+        .name = "",
+    };
+    // assert(strlen(tmp_name) < MAX_NAME_LEN);
+    memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
+    new_dirent.name[strlen(tmp_name)] = '\0';
+
+    struct fs_dirent dir[MAX_DIREN_NUM];
+    int blknum = (parent_inode.ptrs)[0];
+    block_read(dir, blknum, 1);
+    memcpy(&dir[no_free_dirent], &new_dirent, sizeof(struct fs_dirent));
+    block_write(dir, blknum, 1);
+
+    free(duppath);
+
+    return 0;
 }
 
 /* mkdir - create a directory with the given mode.
@@ -343,7 +472,94 @@ int fs_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
  */
 int fs_mkdir(const char *path, mode_t mode) {
     /* your code here */
-    return -EOPNOTSUPP;
+
+    mode = mode | S_IFDIR;
+    if (!S_ISDIR(mode)) {
+        return -EINVAL;
+    }
+
+    char *duppath = strdup(path);
+    char *pathv[MAX_PATH_LEN];
+    int pathc = parse_path(duppath, pathv);
+    int inum_dir = translate_pathv(pathv, pathc - 1);
+
+    if (inum_dir == -ENOENT || inum_dir == -ENOTDIR) {
+        return inum_dir;
+    }
+
+    // check if file exists
+    int inum = translate_pathv(pathv, pathc);
+    if (inum > 0) {
+        return -EEXIST;
+    }
+
+    struct fs_inode parent_inode;
+    block_read(&parent_inode, inum_dir, 1);
+
+    int no_free_dirent = find_free_dirent_num(&parent_inode);
+    if (no_free_dirent < 0) {
+        return -ENOSPC;
+    }
+
+    // dir check
+    if (!S_ISDIR(parent_inode.mode)) {
+        return -ENOTDIR;
+    }
+
+    // set inode region bitmap
+    time_t time_raw_format;
+    time(&time_raw_format);
+    struct fs_inode new_inode = {.uid = getuid(),
+                                 .gid = getgid(),
+                                 .mode = mode,
+                                 .ctime = time_raw_format,
+                                 .mtime = time_raw_format,
+                                 .size = 0,
+                                 .ptrs = {0}};
+
+    int free_blk_num = find_free_block_number();
+    if (free_blk_num < 0) {
+        return -ENOSPC;
+    }
+    bit_set(bitmap, free_blk_num);
+    update_bitmap();
+
+    new_inode.ptrs[0] = free_blk_num;
+    int *free_block = (int *)calloc(FS_BLOCK_SIZE, sizeof(int));
+    block_write(free_block, new_inode.ptrs[0], 1);
+
+    int free_inum = find_free_inode_map_bit();
+    if (free_inum < 0) {
+        free(free_block);
+        return -ENOSPC;
+    }
+    bit_set(bitmap, free_inum);
+    update_bitmap();
+
+    // memcpy(&parent_inode.ptrs[free_inum], &new_inode, sizeof(struct
+    // fs_inode));
+    update_inode(&new_inode, free_inum);
+
+    // set parent_inode dirent then write it
+    char *tmp_name = pathv[pathc - 1];
+    struct fs_dirent new_dirent = {
+        .valid = 1,
+        .inode = free_inum,
+        .name = "",
+    };
+    memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
+    new_dirent.name[strlen(tmp_name)] = '\0';
+
+    struct fs_dirent *dir = (struct fs_dirent *)malloc(FS_BLOCK_SIZE);
+    int blknum = parent_inode.ptrs[0];
+    block_read(dir, blknum, 1);
+    memcpy(&dir[no_free_dirent], &new_dirent, sizeof(struct fs_dirent));
+    block_write(dir, blknum, 1);
+
+    free(dir);
+    free(free_block);
+    free(duppath);
+    return 0;
 }
 
 /* unlink - delete a file
@@ -352,7 +568,57 @@ int fs_mkdir(const char *path, mode_t mode) {
  */
 int fs_unlink(const char *path) {
     /* your code here */
-    return -EOPNOTSUPP;
+    char *duppath = strdup(path);
+    int inum = translate(duppath);
+    free(duppath);
+    if (inum == -ENOENT || inum == -ENOTDIR) {
+        return inum;
+    }
+    struct fs_inode inode;
+    block_read(&inode, inum, 1);
+
+    if (S_ISDIR(inode.mode)) {
+        return -EISDIR;
+    }
+
+    // YTD fs_truncate
+    int truncate_result = fs_truncate(path, 0);
+    if (truncate_result != 0) {
+        return truncate_result;
+    }
+
+    // clear inode_map corresponding bit
+    bit_clear(bitmap, inum);
+    update_bitmap();
+
+    // remove entry from father dir
+
+    char *parent_path;
+    truncate_path(path, &parent_path);
+    int parent_inum = translate(parent_path);
+
+    struct fs_inode parent_inode;
+    block_read(&parent_inode, parent_inum, 1);
+    if (!S_ISDIR(parent_inode.mode)) {
+        return -ENOTDIR;
+    }
+    int blknum = parent_inode.ptrs[0];
+
+    char *_path = strdup(path);
+    char *name = get_name(_path);
+    struct fs_dirent dir[MAX_DIREN_NUM];
+    block_read(dir, blknum, 1);
+    int found = exists_in_directory(dir, name);
+    if (!found) {
+        return -ENOENT;
+    }
+    struct fs_dirent empty_entry = {0};
+    dir[found] = empty_entry;
+
+    block_write(dir, blknum, 1);
+
+    free(_path);
+    return 0;
 }
 
 /* rmdir - remove a directory
@@ -361,28 +627,71 @@ int fs_unlink(const char *path) {
  */
 int fs_rmdir(const char *path) {
     /* your code here */
-    return -EOPNOTSUPP;
-}
-
-static int is_in_same_directory(char *src_path, char *dst_path,
-                                char *src_pathv[], int *src_pathc,
-                                char *dst_pathv[], int *dst_pathc) {
-    *src_pathc = parse_path(src_path, src_pathv);
-    *dst_pathc = parse_path(dst_path, dst_pathv);
-    if (*src_pathc != *dst_pathc) return -1;
-    for (int i = 0; i < *src_pathc - 1; i++) {
-        if (strcmp(src_pathv[i], dst_pathv[i]) != 0) return -1;
+    char *duppath = strdup(path);
+    int inum = translate(duppath);
+    free(duppath);
+    if (inum == -ENOENT || inum == -ENOTDIR) {
+        return inum;
     }
-    return 1;
-}
 
-static int exists_in_directory(struct fs_dirent des[], char *name) {
+    // check if directory is empty. If not return ENOTEMPTY
+    struct fs_inode inode;
+    block_read(&inode, inum, 1);
+    if (!S_ISDIR(inode.mode)) {
+        return -ENOTDIR;
+    }
+    struct fs_dirent entries[MAX_DIREN_NUM];
+    block_read(entries, inode.ptrs[0], 1);
     for (int i = 0; i < MAX_DIREN_NUM; i++) {
-        if (des[i].valid && strcmp(des[i].name, name) == 0) {
-            return i;
+        if (entries[i].valid) {
+            return -ENOTEMPTY;
         }
     }
-    return -1;
+    
+    char *parent_path;
+    int truncate_result = truncate_path(path, &parent_path);
+    // Linux will never generate call to remove root directory. no need to handle error.
+    if (!truncate_result) {
+        // printf("ERROR: Deleting the root directory\n");
+        return truncate_result;
+    }
+
+    // clear inode_map corresponding bit
+    bit_clear(bitmap, inum);
+    update_bitmap();
+
+    // remove entry from parent dir
+    int parent_inum = translate(parent_path);
+    char *_path = strdup(path);
+    if (_path[strlen(_path) - 1] == '/') {
+        _path[strlen(_path) - 1] = '\0';
+    }
+    char *name = get_name(_path);
+    free(parent_path);
+
+    struct fs_inode *parent_inode =
+        (struct fs_inode *)malloc(sizeof(struct fs_inode));
+    block_read(parent_inode, parent_inum, 1);
+    if (!S_ISDIR(parent_inode->mode)) {
+        free(parent_inode);
+        return -ENOTDIR;
+    }
+    int blknum = parent_inode->ptrs[0];
+    struct fs_dirent *_dir = malloc(FS_BLOCK_SIZE);
+    block_read(_dir, blknum, 1);
+    int found = exists_in_directory(_dir, name);
+
+    if (!found) {
+        free(_dir);
+        return -ENOENT;
+    }
+    struct fs_dirent empty_entry = {0};
+    _dir[found] = empty_entry;
+    block_write(_dir, blknum, 1);
+
+    free(_dir);
+    free(_path);
+    return 0;
 }
 
 /* rename - rename a file or directory
@@ -468,7 +777,19 @@ int fs_chmod(const char *path, mode_t mode) {
 
 int fs_utime(const char *path, struct utimbuf *ut) {
     /* your code here */
-    return -EOPNOTSUPP;
+    char * _path = strdup(path);
+    int inum = translate(_path);
+    free(_path);
+    if (inum < 0) {
+        return inum;
+    }
+    struct fs_inode _in;
+    block_read(&_in, inum, 1);
+
+    _in.mtime = ut->modtime;
+    //_in.ctime = ut->actime; not sure
+    block_write(&_in, inum, 1);
+    return 0;
 }
 
 /* truncate - truncate file to exactly 'len' bytes
@@ -483,7 +804,36 @@ int fs_truncate(const char *path, off_t len) {
     if (len != 0) return -EINVAL; /* invalid argument */
 
     /* your code here */
-    return -EOPNOTSUPP;
+    char *_path = strdup(path);
+    int inum = translate(_path);
+    free(_path);
+    if (inum == -ENOENT || inum == -ENOTDIR) {
+        return inum;
+    }
+    struct fs_inode _in;
+    block_read(&_in, inum, 1);
+
+    if (S_ISDIR(_in.mode)) {
+        return -EISDIR;
+    }
+
+    int blck_allocated = (_in.size + FS_BLOCK_SIZE - 1) / FS_BLOCK_SIZE;
+
+    for (int i = 0; i < blck_allocated; i++) {
+        int bck_num = _in.ptrs[i];
+        char zeros[FS_BLOCK_SIZE];
+        memset(zeros, 0, FS_BLOCK_SIZE);
+        block_write(zeros, bck_num, 1);
+        if (i != 0) {
+            bit_clear(bitmap, bck_num);
+            _in.ptrs[i] = 0;
+        }
+    }
+
+    _in.size = len;
+    block_write(&_in, inum, 1);
+    update_bitmap();
+    return 0;
 }
 
 /* read - read data from an open file.
@@ -538,6 +888,25 @@ int fs_read(const char *path, char *buf, size_t len, off_t offset,
     return byte_read;
 }
 
+// len_towrite can be larger than blocksize. len_written will be updated with
+// byte written to disk.
+void fs_write_block(int bck_inum, int bck_start, const char *curr_buf,
+                    int len_towrite, int *len_written) {
+    char modified_bck[FS_BLOCK_SIZE];
+    if (bck_start != 0 || len_towrite < FS_BLOCK_SIZE) {
+        // read block from disk
+        block_read(modified_bck, bck_inum, 1);
+    }
+    int actual_len = len_towrite + bck_start > FS_BLOCK_SIZE
+                         ? FS_BLOCK_SIZE - bck_start
+                         : len_towrite;
+
+    memcpy(modified_bck + bck_start, curr_buf, actual_len);
+    *len_written = actual_len;
+
+    block_write(modified_bck, bck_inum, 1);
+}
+
 /* write - write data to a file
  * success - return number of bytes written. (this will be the same as
  *           the number requested, or else it's an error)
@@ -549,7 +918,64 @@ int fs_read(const char *path, char *buf, size_t len, off_t offset,
 int fs_write(const char *path, const char *buf, size_t len, off_t offset,
              struct fuse_file_info *fi) {
     /* your code here */
-    return -EOPNOTSUPP;
+    int total_len_writen = 0;
+    char *_path = strdup(path);
+    int inum = translate(_path);
+    if (inum == -ENOENT || inum == -ENOTDIR) {
+        return inum;
+    }
+    struct fs_inode _in;
+    block_read(&_in, inum, 1);
+    // inode isn't a file return EISDIR
+    if (!S_ISREG(_in.mode)) {
+        // printf("mode: %o", _in.mode);
+        // printf("It isn't a file.\n");
+        return EISDIR;
+    }
+
+    int file_len = _in.size;
+    // if 'offset' is greater than current file length.
+    if (offset > file_len) return EINVAL;
+
+    int len_towrite = len;
+    const char *curr_buf = buf;
+    off_t curr_offset = offset;
+    int blck_allocated = (file_len + FS_BLOCK_SIZE - 1) / FS_BLOCK_SIZE;
+    while (len_towrite > 0) {
+        int len_written = 0;
+
+        int bck_idx = curr_offset / FS_BLOCK_SIZE;
+        int bck_inum;
+        int bck_start = 0;
+        if (blck_allocated < bck_idx + 1) {
+            // find new block to write on
+            bck_inum = find_free_inode_map_bit();
+            bit_set(bitmap, bck_inum);
+            update_bitmap();
+            _in.ptrs[bck_idx] = bck_inum;
+
+            bck_start = 0;
+        } else {
+            // TODO: may be wrong here
+            bck_start = curr_offset - bck_idx * FS_BLOCK_SIZE;
+            bck_inum = _in.ptrs[bck_idx];
+        }
+
+        fs_write_block(bck_inum, bck_start, curr_buf, len_towrite,
+                       &len_written);
+
+        len_towrite -= len_written;
+        curr_buf += len_written;
+        curr_offset += len_written;
+        total_len_writen += len_written;
+    }
+
+    // write the updated len back to inode.
+    if (file_len < offset + len) {
+        _in.size = offset + len;
+        block_write(&_in, inum, 1);
+    }
+    return total_len_writen;
 }
 
 /* statfs - get file system statistics

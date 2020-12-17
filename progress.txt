@@ -133,3 +133,10 @@ Third part - commenting, clean up & testing scripts for the source code.
 - Satish, Chuhan - fuse mount test on Linux
 
 
+### Part 2 
+fs_create implemented, tested
+fs_mkdir -implemented, tested
+fs_unlink - implemented, tested
+fs_rmdir - implemented, tested
+fs_truncate - implemented, tested
+fs_write - implemented, tested
