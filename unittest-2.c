@@ -581,7 +581,7 @@ START_TEST(fs_truncate_test) {
         "/dir3/subdir/file.8k-",
         "/dir3/subdir/file.12k",
     };
-    int expected_freed[] = {0, 1, 2};
+    int expected_freed[] = {1, 2, 3};
     struct statvfs st;
     fs_ops.statfs("nothing", &st);
     int num_free = st.f_bfree;
