@@ -11,6 +11,10 @@ Team: NULL_pointer
             a.Email - zhang.chuh@northeastern.edu
             b.NUID - 001388346
 
+Part1 status: finished
+Part2 status: finished
+Grading script tests passed: 100%.
+
 Git logs
 
 Total commits – 14 commits
