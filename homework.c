@@ -510,15 +510,9 @@ int fs_mkdir(const char *path, mode_t mode) {
     }
 
     // set inode region bitmap
-    time_t time_raw_format;
-    time(&time_raw_format);
-    struct fs_inode new_inode = {.uid = getuid(),
-                                 .gid = getgid(),
-                                 .mode = mode,
-                                 .ctime = time_raw_format,
-                                 .mtime = time_raw_format,
-                                 .size = 0,
-                                 .ptrs = {0}};
+
+    struct fs_inode new_inode;
+    gen_inode(&new_inode, mode);
 
     int free_inode_num = find_free_block_number();
     if (free_inode_num < 0) {
