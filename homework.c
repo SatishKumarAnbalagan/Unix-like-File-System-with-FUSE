@@ -513,34 +513,30 @@ int fs_mkdir(const char *path, mode_t mode) {
                                  .size = 0,
                                  .ptrs = {0}};
 
-    int free_blk_num = find_free_block_number();
-    if (free_blk_num < 0) {
+    int free_inode_num = find_free_block_number();
+    if (free_inode_num < 0) {
         return -ENOSPC;
     }
-    bit_set(bitmap, free_blk_num);
+    bit_set(bitmap, free_inode_num);
+    update_bitmap();
+    int free_diren_num = find_free_block_number();
+    bit_set(bitmap, free_diren_num);
     update_bitmap();
 
-    new_inode.ptrs[0] = free_blk_num;
+    printf("free_inode_num %d\n", free_inode_num);
+    printf("free_diren_num %d\n", free_diren_num);
+
+    new_inode.ptrs[0] = free_diren_num;
     int *free_block = (int *)calloc(FS_BLOCK_SIZE, sizeof(int));
-    block_write(free_block, new_inode.ptrs[0], 1);
+    block_write(free_block, free_diren_num, 1);
 
-    int free_inum = find_free_inode_map_bit();
-    if (free_inum < 0) {
-        free(free_block);
-        return -ENOSPC;
-    }
-    bit_set(bitmap, free_inum);
-    update_bitmap();
-
-    // memcpy(&parent_inode.ptrs[free_inum], &new_inode, sizeof(struct
-    // fs_inode));
-    update_inode(&new_inode, free_inum);
+    update_inode(&new_inode, free_inode_num);
 
     // set parent_inode dirent then write it
     char *tmp_name = pathv[pathc - 1];
     struct fs_dirent new_dirent = {
         .valid = 1,
-        .inode = free_inum,
+        .inode = free_inode_num,
         .name = "",
     };
     memcpy(new_dirent.name, tmp_name, strlen(tmp_name));
@@ -605,7 +601,7 @@ int fs_unlink(const char *path) {
     struct fs_dirent dir[MAX_DIREN_NUM];
     block_read(dir, blknum, 1);
     int found = exists_in_directory(dir, name);
-    if (!found) {
+    if (found < 0) {
         return -ENOENT;
     }
     struct fs_dirent empty_entry = {0};
@@ -653,8 +649,13 @@ int fs_rmdir(const char *path) {
         return truncate_result;
     }
 
+    // remove directory entry block
+    int diren_inum = inode.ptrs[0];
+    bit_clear(bitmap, diren_inum);
+
     // clear inode_map corresponding bit
     bit_clear(bitmap, inum);
+    
     update_bitmap();
 
     // remove entry from parent dir
