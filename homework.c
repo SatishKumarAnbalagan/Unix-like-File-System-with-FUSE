@@ -524,8 +524,6 @@ int fs_mkdir(const char *path, mode_t mode) {
     bit_set(bitmap, free_diren_num);
     update_bitmap();
 
-    printf("free_inode_num %d\n", free_inode_num);
-    printf("free_diren_num %d\n", free_diren_num);
 
     new_inode.ptrs[0] = free_diren_num;
     int *free_block = (int *)calloc(FS_BLOCK_SIZE, sizeof(int));
